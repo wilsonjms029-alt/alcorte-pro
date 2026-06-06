@@ -1,0 +1,17 @@
+# Claude Code
+.claude/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/diagnostic files
+test.php
+diagnostico.html

@@ -1,0 +1,165 @@
+<?php
+session_start();
+require_once '../config/config.php';
+
+if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
+    header("Location: ../../");
+    exit;
+}
+
+$action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
+
+// --- SUCURSALES ---
+if ($action == 'add_sucursal') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $nombre = trim($_POST['shop_name']);
+    $direccion = trim($_POST['shop_address']);
+    $stmt = $conn->prepare("INSERT INTO sucursales (nombre, direccion) VALUES (?, ?)");
+    $stmt->bind_param("ss", $nombre, $direccion);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Sucursal+registrada+con+éxito");
+    exit;
+}
+
+if ($action == 'edit_sucursal') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id = intval($_POST['id']);
+    $nombre = trim($_POST['shop_name']);
+    $direccion = trim($_POST['shop_address']);
+    $stmt = $conn->prepare("UPDATE sucursales SET nombre = ?, direccion = ? WHERE id = ?");
+    $stmt->bind_param("ssi", $nombre, $direccion, $id);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Sucursal+actualizada");
+    exit;
+}
+
+if ($action == 'delete_sucursal') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id = intval($_POST['id']);
+    $stmt = $conn->prepare("DELETE FROM sucursales WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Sucursal+eliminada");
+    exit;
+}
+
+// --- PLANES ---
+if ($action == 'add_plan') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=planes&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $nombre        = trim($_POST['plan_nombre']);
+    $precio        = floatval($_POST['plan_precio']);
+    $max_barberos  = intval($_POST['plan_max_barberos']);
+    $max_citas     = intval($_POST['plan_max_citas']);
+    $descripcion   = trim($_POST['plan_descripcion']);
+    $stmt = $conn->prepare("INSERT INTO planes (nombre, precio_mensual, max_barberos, max_citas_mes, descripcion) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("sdiis", $nombre, $precio, $max_barberos, $max_citas, $descripcion);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=planes&msg=Plan+creado+con+éxito");
+    exit;
+}
+
+if ($action == 'edit_plan') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=planes&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id            = intval($_POST['plan_id']);
+    $nombre        = trim($_POST['plan_nombre']);
+    $precio        = floatval($_POST['plan_precio']);
+    $max_barberos  = intval($_POST['plan_max_barberos']);
+    $max_citas     = intval($_POST['plan_max_citas']);
+    $descripcion   = trim($_POST['plan_descripcion']);
+    $stmt = $conn->prepare("UPDATE planes SET nombre=?, precio_mensual=?, max_barberos=?, max_citas_mes=?, descripcion=? WHERE id=?");
+    $stmt->bind_param("sdiisi", $nombre, $precio, $max_barberos, $max_citas, $descripcion, $id);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=planes&msg=Plan+actualizado");
+    exit;
+}
+
+if ($action == 'delete_plan') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=planes&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id = intval($_POST['id']);
+    $stmt = $conn->prepare("DELETE FROM planes WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=planes&msg=Plan+eliminado");
+    exit;
+}
+
+// --- PAGOS ---
+if ($action == 'add_pago') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=pagos&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $sucursal_id = intval($_POST['pago_sucursal']);
+    $plan_id     = intval($_POST['pago_plan']) ?: null;
+    $monto       = floatval($_POST['pago_monto']);
+    $fecha       = trim($_POST['pago_fecha']);
+    $metodo      = trim($_POST['pago_metodo']);
+    $referencia  = trim($_POST['pago_referencia']);
+    $notas       = trim($_POST['pago_notas']);
+    $user_id     = $_SESSION['user_id'];
+    $stmt = $conn->prepare("INSERT INTO pagos_suscripcion (sucursal_id, plan_id, monto, fecha_pago, metodo, referencia, notas, registrado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("iidssssi", $sucursal_id, $plan_id, $monto, $fecha, $metodo, $referencia, $notas, $user_id);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=pagos&msg=Pago+registrado+con+éxito");
+    exit;
+}
+
+if ($action == 'delete_pago') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=pagos&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id = intval($_POST['id']);
+    $stmt = $conn->prepare("DELETE FROM pagos_suscripcion WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=pagos&msg=Pago+eliminado");
+    exit;
+}
+
+// --- SUSCRIPCIONES ---
+if ($action == 'assign_plan') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=estadisticas&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $sucursal_id = intval($_POST['sub_sucursal']);
+    $plan_id     = intval($_POST['sub_plan']);
+    $inicio      = trim($_POST['sub_inicio']);
+    $fin         = trim($_POST['sub_fin']);
+    $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?")->execute() || true;
+    $d = $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?");
+    $d->bind_param("i", $sucursal_id);
+    $d->execute();
+    $d->close();
+    $stmt = $conn->prepare("INSERT INTO suscripciones (sucursal_id, plan_id, fecha_inicio, fecha_vencimiento, estado) VALUES (?, ?, ?, ?, 'activo')");
+    $stmt->bind_param("iiss", $sucursal_id, $plan_id, $inicio, $fin);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=estadisticas&msg=Suscripción+asignada+correctamente");
+    exit;
+}
+
+// --- SETTINGS ---
+if ($action == 'save_settings') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=settings&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $nombre_negocio = trim($_POST['nombre_negocio']);
+    $zelle_email    = trim($_POST['zelle_email']);
+    $stmt = $conn->prepare("INSERT INTO configuracion (clave, valor, sucursal_id) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE valor = ?");
+    foreach (['nombre_negocio' => $nombre_negocio, 'zelle_email' => $zelle_email] as $clave => $valor) {
+        $stmt->bind_param("sss", $clave, $valor, $valor);
+        $stmt->execute();
+    }
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=settings&msg=Configuración+actualizada");
+    exit;
+}
