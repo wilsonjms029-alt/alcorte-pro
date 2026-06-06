@@ -79,7 +79,7 @@ if ($page == 'editar' && $edit_id) {
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Nombre</th>
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Usuario</th>
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Rol</th>
-                                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Sucursal</th>
+                                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Tienda</th>
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Barbero</th>
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Acciones</th>
                                     </tr>
@@ -178,11 +178,11 @@ if ($page == 'editar' && $edit_id) {
                             </div>
 
                             <div id="field_sucursal" style="display:none;">
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Sucursal *</label>
+                                <label class="block text-sm font-bold text-slate-700 mb-2">Tienda *</label>
                                 <select name="sucursal_id" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-gold">
-                                    <option value="">Selecciona sucursal</option>
+                                    <option value="">Selecciona tienda</option>
                                     <?php
-                                    $sucursales = $conn->query("SELECT * FROM sucursales WHERE activo = 1 ORDER BY nombre");
+                                    $sucursales = $conn->query("SELECT * FROM sucursales WHERE activo = 1 AND id > 1 ORDER BY nombre");
                                     while ($suc = $sucursales->fetch_assoc()) {
                                         $selected = (($edit_user['sucursal_id'] ?? 0) == $suc['id']) ? 'selected' : '';
                                         echo "<option value=\"{$suc['id']}\" {$selected}>" . htmlspecialchars($suc['nombre']) . "</option>";

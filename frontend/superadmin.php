@@ -1,6 +1,4 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 require_once '../backend/config/config.php';
 
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
@@ -13,7 +11,7 @@ $msg  = isset($_GET['msg']) ? htmlspecialchars($_GET['msg']) : '';
 
 // === KPIs MACRO ===
 $total_citas      = $conn->query("SELECT COUNT(*) as t FROM citas")->fetch_assoc()['t'];
-$total_sucursales = ($conn->query("SELECT COUNT(*) as t FROM sucursales")->fetch_assoc()['t']) + 1;
+$total_sucursales = $conn->query("SELECT COUNT(*) as t FROM sucursales WHERE id > 1")->fetch_assoc()['t'];
 $total_barberos   = $conn->query("SELECT COUNT(*) as t FROM barberos")->fetch_assoc()['t'];
 
 // === GRÁFICA DASHBOARD ===
@@ -74,6 +72,7 @@ $recaudacion_suc = [];
 if ($has_pagos) {
     $r = $conn->query("SELECT s.id, s.nombre, COALESCE(SUM(p.monto),0) as total
         FROM sucursales s LEFT JOIN pagos_suscripcion p ON p.sucursal_id = s.id
+        WHERE s.id > 1
         GROUP BY s.id, s.nombre");
     if ($r) while ($row = $r->fetch_assoc()) $recaudacion_suc[$row['id']] = $row;
 }
@@ -85,7 +84,7 @@ if ($r) while ($row = $r->fetch_assoc()) $config[$row['clave']] = $row['valor'];
 
 // === SUCURSALES ===
 $sucursales_arr = [];
-$r = $conn->query("SELECT id, nombre FROM sucursales ORDER BY nombre");
+$r = $conn->query("SELECT id, nombre, direccion FROM sucursales WHERE id > 1 ORDER BY id ASC");
 if ($r) while ($row = $r->fetch_assoc()) $sucursales_arr[] = $row;
 
 // Plan colores
@@ -277,9 +276,9 @@ $plan_colors = [
         <a href="superadmin.php?page=estadisticas" class="nav-item <?php echo $page=='estadisticas'?'active':''; ?>">
             <i class="fas fa-chart-bar"></i><span>Estadísticas</span>
         </a>
-        <div class="nav-section">Negocios</div>
+        <div class="nav-section">Tiendas</div>
         <a href="superadmin.php?page=barbershops" class="nav-item <?php echo $page=='barbershops'?'active':''; ?>">
-            <i class="fas fa-store"></i><span>Sucursales</span>
+            <i class="fas fa-store"></i><span>Tiendas</span>
         </a>
         <a href="superadmin.php?page=planes" class="nav-item <?php echo $page=='planes'?'active':''; ?>">
             <i class="fas fa-layer-group"></i><span>Planes</span>
@@ -312,7 +311,10 @@ $plan_colors = [
     <nav class="topnav">
         <div class="breadcrumb">
             Torre de Control <i class="fas fa-chevron-right" style="font-size:8px;color:#cbd5e1"></i>
-            <span><?php echo strtoupper(str_replace('_',' ',$page)); ?></span>
+            <span><?php
+                $page_labels = ['dashboard'=>'DASHBOARD','estadisticas'=>'ESTADÍSTICAS','barbershops'=>'TIENDAS','planes'=>'PLANES','pagos'=>'PAGOS','settings'=>'CONFIGURACIÓN'];
+                echo $page_labels[$page] ?? strtoupper(str_replace('_',' ',$page));
+            ?></span>
         </div>
         <div class="topnav-right">
             <?php if($msg): ?><span class="msg-pill">✓ <?php echo $msg; ?></span><?php endif; ?>
@@ -337,7 +339,7 @@ $plan_colors = [
 
         <div class="page-header">
             <h1 class="page-title">Torre de <span>Control</span></h1>
-            <p class="page-subtitle">Monitoreo global de sucursales, rendimiento y facturación.</p>
+            <p class="page-subtitle">Monitoreo global de tiendas, rendimiento y facturación.</p>
         </div>
 
         <div class="kpi-grid">
@@ -346,7 +348,7 @@ $plan_colors = [
                 <div class="stat-value"><?php echo number_format($total_citas); ?></div>
             </div>
             <div class="stat-card gold">
-                <div class="stat-label">Sucursales</div>
+                <div class="stat-label">Tiendas</div>
                 <div class="stat-value"><?php echo $total_sucursales; ?></div>
             </div>
             <div class="stat-card purple">
@@ -390,7 +392,7 @@ $plan_colors = [
 
         <div class="page-header">
             <h1 class="page-title">Estado de <span>Suscripciones</span></h1>
-            <p class="page-subtitle">Seguimiento de planes activos, vencimientos y recaudación por negocio.</p>
+            <p class="page-subtitle">Seguimiento de planes activos, vencimientos y recaudación por tienda.</p>
         </div>
 
         <div class="kpi-grid">
@@ -418,13 +420,13 @@ $plan_colors = [
                 <div class="card-body"><div style="height:220px"><canvas id="chartBar"></canvas></div></div>
             </div>
             <div class="card" style="margin-bottom:0">
-                <div class="card-header"><h3>Asignar Plan a Sucursal</h3></div>
+                <div class="card-header"><h3>Asignar Plan a Tienda</h3></div>
                 <div class="card-body">
                     <form action="../backend/processing/superadmin.php" method="POST">
                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                         <input type="hidden" name="action" value="assign_plan">
                         <div class="form-group">
-                            <label class="form-label">Sucursal</label>
+                            <label class="form-label">Tienda</label>
                             <select name="sub_sucursal" class="form-select" required>
                                 <option value="">— Seleccionar sucursal —</option>
                                 <?php foreach($sucursales_arr as $s): ?>
@@ -459,13 +461,13 @@ $plan_colors = [
 
         <div class="card">
             <div class="card-header">
-                <h3>Listado de Negocios</h3>
+                <h3>Listado de Tiendas</h3>
                 <small>Estado de planes y subdominios</small>
             </div>
             <div class="table-wrap">
                 <table>
                     <thead><tr>
-                        <th>Negocio / Sede</th>
+                        <th>Tienda</th>
                         <th>Plan Activo</th>
                         <th>Recaudación</th>
                         <th>Vencimiento</th>
@@ -478,6 +480,7 @@ $plan_colors = [
                         FROM sucursales s
                         LEFT JOIN suscripciones sub ON sub.sucursal_id = s.id
                         LEFT JOIN planes pl ON pl.id = sub.plan_id
+                        WHERE s.id > 1
                         ORDER BY s.nombre");
                     if ($all_suc && $all_suc->num_rows > 0):
                         $pci = 0;
@@ -530,7 +533,7 @@ $plan_colors = [
                         </td>
                     </tr>
                     <?php endwhile; else: ?>
-                    <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8">Sin sucursales registradas</td></tr>
+                    <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8">Sin tiendas registradas</td></tr>
                     <?php endif; ?>
                     </tbody>
                 </table>
@@ -554,13 +557,13 @@ $plan_colors = [
         <?php elseif($page == 'barbershops'): ?>
 
         <div class="page-header">
-            <h1 class="page-title">Gestión de <span>Sucursales</span></h1>
-            <p class="page-subtitle">Registro y administración de sedes del sistema.</p>
+            <h1 class="page-title">Gestión de <span>Tiendas</span></h1>
+            <p class="page-subtitle">Registro y administración de tiendas del sistema.</p>
         </div>
 
         <div class="grid-2">
             <div class="card" style="align-self:start;margin-bottom:0">
-                <div class="card-header" id="suc-form-title"><h3>Registrar Sucursal</h3></div>
+                <div class="card-header" id="suc-form-title"><h3>Registrar Tienda</h3></div>
                 <div class="card-body">
                     <form action="../backend/processing/superadmin.php" method="POST">
                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
@@ -568,7 +571,7 @@ $plan_colors = [
                         <input type="hidden" id="shop_id" name="id" value="">
                         <div class="form-group">
                             <label class="form-label">Nombre Comercial</label>
-                            <input type="text" id="shop_name" name="shop_name" class="form-input" placeholder="Ej. Sede Norte" required>
+                            <input type="text" id="shop_name" name="shop_name" class="form-input" placeholder="Ej. Tienda Norte" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Dirección</label>
@@ -583,16 +586,14 @@ $plan_colors = [
             </div>
 
             <div class="card" style="margin-bottom:0">
-                <div class="card-header"><h3>Sucursales en el Sistema</h3></div>
+                <div class="card-header"><h3>Tiendas en el Sistema</h3></div>
                 <div class="table-wrap">
                     <table>
                         <thead><tr><th>Nombre</th><th>Dirección</th><th style="text-align:right">Acciones</th></tr></thead>
                         <tbody>
-                        <tr>
-                            <td><div style="font-weight:800">Sede Central</div></td>
-                            <td style="font-size:12px;color:#94a3b8">Matriz integrada</td>
-                            <td style="text-align:right"><span class="plan-badge" style="background:#fffbeb;color:#92400e;border-color:#fde68a">Inmutable</span></td>
-                        </tr>
+                        <?php if(empty($sucursales_arr)): ?>
+                        <tr><td colspan="3" style="text-align:center;padding:40px;color:#94a3b8">Sin tiendas registradas. Crea la primera con el formulario.</td></tr>
+                        <?php endif; ?>
                         <?php foreach($sucursales_arr as $s): ?>
                         <tr>
                             <td style="font-weight:800"><?php echo htmlspecialchars($s['nombre']); ?></td>
@@ -602,7 +603,7 @@ $plan_colors = [
                                     <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>')" class="btn btn-ghost btn-sm">
                                         <i class="fas fa-pen"></i> Editar
                                     </button>
-                                    <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta sucursal?')">
+                                    <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda?')">
                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                         <input type="hidden" name="action" value="delete_sucursal">
                                         <input type="hidden" name="id" value="<?php echo $s['id']; ?>">
@@ -623,7 +624,7 @@ $plan_colors = [
             document.getElementById('shop_name').value=nombre;
             document.getElementById('shop_address').value=dir;
             document.getElementById('shop_action').value='edit_sucursal';
-            document.querySelector('#suc-form-title h3').textContent='Editar Sucursal';
+            document.querySelector('#suc-form-title h3').textContent='Editar Tienda';
             document.getElementById('shop_name').focus();
         }
         function resetSucForm(){
@@ -631,7 +632,7 @@ $plan_colors = [
             document.getElementById('shop_name').value='';
             document.getElementById('shop_address').value='';
             document.getElementById('shop_action').value='add_sucursal';
-            document.querySelector('#suc-form-title h3').textContent='Registrar Sucursal';
+            document.querySelector('#suc-form-title h3').textContent='Registrar Tienda';
         }
         </script>
 
@@ -794,13 +795,13 @@ $plan_colors = [
         <!-- RECAUDACIÓN POR NEGOCIO -->
         <div class="card">
             <div class="card-header">
-                <h3>Expediente por Negocio</h3>
+                <h3>Expediente por Tienda</h3>
                 <small>Recaudación total e historial por sucursal</small>
             </div>
             <div class="table-wrap">
                 <table>
                     <thead><tr>
-                        <th>Negocio / Sede</th>
+                        <th>Tienda</th>
                         <th>Plan Activo</th>
                         <th>Precio/mes</th>
                         <th>Recaudación Total</th>
@@ -816,6 +817,7 @@ $plan_colors = [
                         LEFT JOIN suscripciones sub ON sub.sucursal_id = s.id
                         LEFT JOIN planes pl ON pl.id = sub.plan_id
                         LEFT JOIN pagos_suscripcion p ON p.sucursal_id = s.id
+                        WHERE s.id > 1
                         GROUP BY s.id
                         ORDER BY s.nombre");
                     if ($exp && $exp->num_rows > 0):
@@ -861,7 +863,7 @@ $plan_colors = [
                         </td>
                     </tr>
                     <?php endwhile; else: ?>
-                    <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8">Sin sucursales registradas</td></tr>
+                    <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8">Sin tiendas registradas</td></tr>
                     <?php endif; ?>
                     </tbody>
                 </table>
@@ -877,7 +879,7 @@ $plan_colors = [
                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                         <input type="hidden" name="action" value="add_pago">
                         <div class="form-group">
-                            <label class="form-label">Negocio / Sucursal</label>
+                            <label class="form-label">Tienda</label>
                             <select name="pago_sucursal" class="form-select" required>
                                 <option value="">— Seleccionar —</option>
                                 <?php foreach($sucursales_arr as $s): ?>
@@ -937,7 +939,7 @@ $plan_colors = [
                 <div class="table-wrap">
                     <table>
                         <thead><tr>
-                            <th>Fecha</th><th>Negocio</th><th>Plan</th>
+                            <th>Fecha</th><th>Tienda</th><th>Plan</th>
                             <th>Monto</th><th>Método</th><th></th>
                         </tr></thead>
                         <tbody>

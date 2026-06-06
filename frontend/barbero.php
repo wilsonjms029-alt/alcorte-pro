@@ -1,6 +1,4 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 require_once '../backend/config/config.php';
 
 // Seguridad del rol
@@ -10,13 +8,48 @@ if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'barbero') {
 }
 
 $id_barbero = intval($_SESSION['barbero_id']);
+$msg = isset($_GET['msg']) ? htmlspecialchars($_GET['msg']) : '';
 
-// Obtener las citas de la agenda exclusivas de este barbero
-$stmt = $conn->prepare("SELECT * FROM citas WHERE barbero_id = ? ORDER BY fecha ASC, hora ASC");
+// Marcar cita como completada / cancelada (solo citas propias)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cita_id'], $_POST['nuevo_estado'])) {
+    if (!csrf_validate()) {
+        header("Location: barbero.php?msg=Error+de+seguridad");
+        exit;
+    }
+    csrf_regenerate();
+
+    $cita_id      = intval($_POST['cita_id']);
+    $nuevo_estado = $_POST['nuevo_estado'];
+
+    if (in_array($nuevo_estado, ['completada', 'cancelada'], true)) {
+        $up = $conn->prepare("UPDATE citas SET estado = ? WHERE id = ? AND barbero_id = ?");
+        $up->bind_param("sii", $nuevo_estado, $cita_id, $id_barbero);
+        $up->execute();
+        $up->close();
+        $txt = $nuevo_estado === 'completada' ? 'Cita+marcada+como+completada' : 'Cita+cancelada';
+        header("Location: barbero.php?msg=$txt");
+        exit;
+    }
+    header("Location: barbero.php");
+    exit;
+}
+
+// Obtener las citas del barbero (programadas primero, luego por fecha/hora)
+$stmt = $conn->prepare(
+    "SELECT * FROM citas WHERE barbero_id = ?
+     ORDER BY CASE estado WHEN 'programada' THEN 0 WHEN 'completada' THEN 1 ELSE 2 END,
+              fecha ASC, hora ASC"
+);
 $stmt->bind_param("i", $id_barbero);
 $stmt->execute();
-$mis_citas = $stmt->get_result();
-$total_agenda = $mis_citas->num_rows;
+$res = $stmt->get_result();
+$citas_arr = [];
+while ($c = $res->fetch_assoc()) { $citas_arr[] = $c; }
+$stmt->close();
+
+$total_agenda  = count($citas_arr);
+$n_programadas = count(array_filter($citas_arr, fn($c) => $c['estado'] === 'programada'));
+$n_completadas = count(array_filter($citas_arr, fn($c) => $c['estado'] === 'completada'));
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -358,6 +391,67 @@ $total_agenda = $mis_citas->num_rows;
             color: #9ca3af;
         }
 
+        /* MENSAJE TOAST */
+        .msg-toast {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 12px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #d1fae5;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ESTADO BADGE */
+        .estado-badge {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+        }
+        .estado-programada { background: #eef2ff; color: #3730a3; }
+        .estado-completada { background: #dcfce7; color: #166534; }
+        .estado-cancelada  { background: #fee2e2; color: #991b1b; }
+
+        /* TARJETAS POR ESTADO */
+        .cita-card.is-done   { opacity: 0.85; }
+        .cita-card.is-done .cita-card-header   { background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); border-left-color: #14532d; }
+        .cita-card.is-cancelled { opacity: 0.6; }
+        .cita-card.is-cancelled .cita-card-header { background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%); border-left-color: #4b5563; }
+        .cita-card.is-cancelled .cita-client { text-decoration: line-through; color: #9ca3af; }
+
+        /* BOTONES DE ACCIÓN */
+        .cita-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .act-btn {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.18s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .act-done   { background: #dcfce7; color: #166534; }
+        .act-done:hover   { background: #16a34a; color: #fff; }
+        .act-cancel { background: #fef2f2; color: #b91c1c; }
+        .act-cancel:hover { background: #ef4444; color: #fff; }
+
         /* RESPONSIVE */
         @media (max-width: 768px) {
             .sidebar {
@@ -431,10 +525,17 @@ $total_agenda = $mis_citas->num_rows;
             <!-- HEADER -->
             <header class="header">
                 <span class="header-breadcrumb">Mi Agenda de Turnos</span>
-                <span class="header-badge">
-                    <i class="fas fa-calendar-day"></i>
-                    <?php echo $total_agenda; ?> Turno<?php echo $total_agenda != 1 ? 's' : ''; ?>
-                </span>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <?php if ($msg): ?><span class="msg-toast"><i class="fas fa-circle-check"></i> <?php echo $msg; ?></span><?php endif; ?>
+                    <span class="header-badge" style="background:#eef2ff;color:#3730a3;border-color:#c7d2fe">
+                        <i class="fas fa-hourglass-half"></i>
+                        <?php echo $n_programadas; ?> Pendiente<?php echo $n_programadas != 1 ? 's' : ''; ?>
+                    </span>
+                    <span class="header-badge">
+                        <i class="fas fa-calendar-day"></i>
+                        <?php echo $total_agenda; ?> Turno<?php echo $total_agenda != 1 ? 's' : ''; ?>
+                    </span>
+                </div>
             </header>
 
             <!-- CONTENT -->
@@ -454,8 +555,11 @@ $total_agenda = $mis_citas->num_rows;
                         </div>
                     <?php else: ?>
                         <div class="citas-grid">
-                            <?php while ($row = $mis_citas->fetch_assoc()): ?>
-                                <div class="cita-card">
+                            <?php foreach ($citas_arr as $row):
+                                $est = $row['estado'];
+                                $cardClass = $est === 'completada' ? 'is-done' : ($est === 'cancelada' ? 'is-cancelled' : '');
+                            ?>
+                                <div class="cita-card <?php echo $cardClass; ?>">
                                     <div class="cita-card-header">
                                         <div class="cita-time">
                                             <?php echo date('H:i', strtotime($row['hora'])); ?>
@@ -477,14 +581,33 @@ $total_agenda = $mis_citas->num_rows;
                                             <?php echo htmlspecialchars($row['servicio']); ?>
                                         </div>
                                         <div class="cita-footer">
-                                            <span class="cita-payment">Pago</span>
+                                            <span class="estado-badge estado-<?php echo $est; ?>">
+                                                <?php echo ucfirst($est); ?>
+                                            </span>
                                             <span class="cita-payment <?php echo $row['estado_pago'] == 'pendiente' ? 'cita-status-pending' : 'cita-status-verified'; ?>" style="padding: 4px 8px; border-radius: 4px;">
-                                                <?php echo $row['estado_pago'] == 'pendiente' ? 'Pendiente' : 'Verificado'; ?>
+                                                Pago <?php echo $row['estado_pago'] == 'pendiente' ? 'Pendiente' : 'OK'; ?>
                                             </span>
                                         </div>
+
+                                        <?php if ($est === 'programada'): ?>
+                                        <div class="cita-actions">
+                                            <form method="POST" style="flex:1">
+                                                <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                                <input type="hidden" name="cita_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="nuevo_estado" value="completada">
+                                                <button type="submit" class="act-btn act-done"><i class="fas fa-check"></i> Completar</button>
+                                            </form>
+                                            <form method="POST" style="flex:1" onsubmit="return confirm('¿Cancelar esta cita?')">
+                                                <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                                <input type="hidden" name="cita_id" value="<?php echo $row['id']; ?>">
+                                                <input type="hidden" name="nuevo_estado" value="cancelada">
+                                                <button type="submit" class="act-btn act-cancel"><i class="fas fa-xmark"></i> Cancelar</button>
+                                            </form>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
-                            <?php endwhile; ?>
+                            <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
                 </div>

@@ -68,7 +68,12 @@ if ($action == 'add_barbero') {
     $hora_fin        = $_POST['hora_fin'];
     $almuerzo_inicio = $_POST['almuerzo_inicio'];
     $almuerzo_fin    = $_POST['almuerzo_fin'];
-    $sucursal_id     = ($scope_id !== null) ? $scope_id : intval($_POST['sucursal_id'] ?? 1);
+    $sucursal_id     = ($scope_id !== null) ? $scope_id : intval($_POST['sucursal_id'] ?? 0);
+    if ($sucursal_id <= 1) {
+        // Sin tienda elegida: usar la primera tienda real disponible
+        $row = $conn->query("SELECT MIN(id) AS id FROM sucursales WHERE id > 1")->fetch_assoc();
+        $sucursal_id = intval($row['id'] ?? 0) ?: 1;
+    }
     $barb_usuario    = trim($_POST['barb_usuario'] ?? '');
     $barb_password   = trim($_POST['barb_password'] ?? '');
 

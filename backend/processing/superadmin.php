@@ -19,7 +19,7 @@ if ($action == 'add_sucursal') {
     $stmt->bind_param("ss", $nombre, $direccion);
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Sucursal+registrada+con+éxito");
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Tienda+registrada+con+éxito");
     exit;
 }
 
@@ -33,7 +33,7 @@ if ($action == 'edit_sucursal') {
     $stmt->bind_param("ssi", $nombre, $direccion, $id);
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Sucursal+actualizada");
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Tienda+actualizada");
     exit;
 }
 
@@ -41,11 +41,12 @@ if ($action == 'delete_sucursal') {
     if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
     csrf_regenerate();
     $id = intval($_POST['id']);
+    if ($id === 1) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Esa+tienda+no+se+puede+eliminar"); exit; }
     $stmt = $conn->prepare("DELETE FROM sucursales WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Sucursal+eliminada");
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Tienda+eliminada");
     exit;
 }
 
@@ -135,7 +136,7 @@ if ($action == 'assign_plan') {
     $plan_id     = intval($_POST['sub_plan']);
     $inicio      = trim($_POST['sub_inicio']);
     $fin         = trim($_POST['sub_fin']);
-    $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?")->execute() || true;
+    // Una sucursal tiene una sola suscripción activa: reemplazar la anterior.
     $d = $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?");
     $d->bind_param("i", $sucursal_id);
     $d->execute();

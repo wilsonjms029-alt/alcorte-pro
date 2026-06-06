@@ -1,9 +1,5 @@
 <?php
-// Forzar reporte de errores
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-// Cargamos la conexión asegurando que no explote
+// La configuración central gestiona errores, conexión y sesión.
 require_once './backend/config/config.php';
 
 $error = "";

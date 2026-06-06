@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS citas (
     metodo_pago VARCHAR(50) NOT NULL DEFAULT 'Efectivo',
     referencia_pago VARCHAR(200) DEFAULT NULL,
     estado_pago ENUM('pendiente','verificado') NOT NULL DEFAULT 'pendiente',
+    estado ENUM('programada','completada','cancelada') NOT NULL DEFAULT 'programada',
     sucursal_id INT DEFAULT 1,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -102,9 +103,13 @@ CREATE TABLE IF NOT EXISTS pagos_suscripcion (
     FOREIGN KEY (plan_id) REFERENCES planes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Sede Central (sucursal base del sistema, id fijo = 1)
+INSERT IGNORE INTO sucursales (id, nombre, direccion, activo)
+VALUES (1, 'Sede Central', 'Casa matriz del negocio', 1);
+
 -- Default superadmin: usuario=admin, password=admin1234
 INSERT IGNORE INTO usuarios (usuario, password, nombre, rol)
-VALUES ('admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrador', 'superadmin');
+VALUES ('admin', '$2y$10$F0K6mYcGCpA0eURhto3/reVXHGS0JUPd3FcHpmdfE4D4kr/WWj43C', 'Administrador', 'superadmin');
 
 -- Default config for sucursal 1
 INSERT IGNORE INTO configuracion (clave, valor, sucursal_id) VALUES

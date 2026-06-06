@@ -1,11 +1,17 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 require_once '../backend/config/config.php';
 
 $msg      = "";
 $msg_type = "success";
 $tab      = isset($_GET['tab']) ? $_GET['tab'] : 'reservar';
+
+// Servicios disponibles (catálogo)
+$servicios = [
+    "Corte Clásico"    => "30 min — Bs 8",
+    "Barba Premium"    => "20 min — Bs 6",
+    "Combo AlCorte Pro"=> "50 min — Bs 12",
+    "Corte + Cejas"    => "40 min — Bs 10",
+];
 
 // PROCESAR RESERVA
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'agendar') {
@@ -23,24 +29,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'agend
         $hora      = trim($_POST['hora'] ?? '');
         $metodo    = trim($_POST['metodo_pago'] ?? '');
         $referencia = trim($_POST['referencia_pago'] ?? '');
+        $tel_digitos = preg_replace('/\D/', '', $telefono);
 
-        if (!$nombre || !$telefono || !$fecha || !$hora || !$metodo || !$servicio) {
-            $msg = "Por favor, completa todos los campos requeridos.";
+        // ─── Validación de servidor (no confiar solo en el navegador) ───
+        $error_val = null;
+        if (!$nombre || !$telefono || !$fecha || !$hora || !$metodo || !$servicio || !$barbero) {
+            $error_val = "Por favor, completa todos los campos requeridos.";
+        } elseif (strlen($tel_digitos) < 7 || strlen($tel_digitos) > 15) {
+            $error_val = "El número de teléfono no parece válido.";
+        } elseif (!array_key_exists($servicio, $servicios)) {
+            $error_val = "El servicio seleccionado no es válido.";
+        } elseif (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || $fecha < date('Y-m-d')) {
+            $error_val = "La fecha no puede ser anterior a hoy.";
+        } else {
+            // El barbero debe existir y estar activo
+            $stmt_b = $conn->prepare("SELECT nombre, hora_inicio, hora_fin, almuerzo_inicio, almuerzo_fin, sucursal_id FROM barberos WHERE id = ? AND activo = 1");
+            $stmt_b->bind_param("i", $barbero);
+            $stmt_b->execute();
+            $bdata = $stmt_b->get_result()->fetch_assoc();
+            $stmt_b->close();
+
+            if (!$bdata) {
+                $error_val = "El especialista seleccionado no está disponible.";
+            } else {
+                $t    = strtotime($hora);
+                $ini  = strtotime($bdata['hora_inicio']);
+                $fin  = strtotime($bdata['hora_fin']);
+                $almi = strtotime($bdata['almuerzo_inicio']);
+                $almf = strtotime($bdata['almuerzo_fin']);
+                $hoy  = date('Y-m-d');
+
+                if ($t === false || $t < $ini || $t >= $fin) {
+                    $error_val = "Ese horario está fuera del turno de " . $bdata['nombre']
+                        . " (" . date('h:i A', $ini) . " a " . date('h:i A', $fin) . ").";
+                } elseif ($t >= $almi && $t < $almf) {
+                    $error_val = $bdata['nombre'] . " está en su hora de almuerzo a esa hora. Elige otro horario.";
+                } elseif ($fecha === $hoy && $t < strtotime(date('H:i'))) {
+                    $error_val = "Esa hora ya pasó. Elige un horario futuro.";
+                } else {
+                    // El cupo no debe estar ya tomado (excluye citas canceladas)
+                    $stmt_chk = $conn->prepare("SELECT id FROM citas WHERE barbero_id = ? AND fecha = ? AND hora = ? AND estado != 'cancelada'");
+                    $stmt_chk->bind_param("iss", $barbero, $fecha, $hora);
+                    $stmt_chk->execute();
+                    if ($stmt_chk->get_result()->num_rows > 0) {
+                        $error_val = "Ese cupo ya fue reservado. Por favor elige otra hora.";
+                    }
+                    $stmt_chk->close();
+                }
+            }
+        }
+
+        if ($error_val !== null) {
+            $msg = $error_val;
             $msg_type = "error";
         } else {
-            $estado = ($metodo === 'Efectivo') ? 'verificado' : 'pendiente';
+            $estado_pago = ($metodo === 'Efectivo') ? 'verificado' : 'pendiente';
+            $suc_cita    = intval($bdata['sucursal_id'] ?? 1) ?: 1;
 
             $stmt = $conn->prepare(
-                "INSERT INTO citas (barbero_id, cliente_nombre, cliente_telefono, servicio, fecha, hora, metodo_pago, referencia_pago, estado_pago)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                "INSERT INTO citas (barbero_id, cliente_nombre, cliente_telefono, servicio, fecha, hora, metodo_pago, referencia_pago, estado_pago, sucursal_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
-            $stmt->bind_param("issssssss", $barbero, $nombre, $telefono, $servicio, $fecha, $hora, $metodo, $referencia, $estado);
+            $stmt->bind_param("issssssssi", $barbero, $nombre, $tel_digitos, $servicio, $fecha, $hora, $metodo, $referencia, $estado_pago, $suc_cita);
 
             if ($stmt->execute()) {
                 $msg = "¡Turno solicitado con éxito! Te esperamos el " . date('d/m/Y', strtotime($fecha)) . " a las " . date('h:i A', strtotime($hora)) . ".";
                 $msg_type = "success";
+                $_POST = []; // limpiar el formulario tras éxito
             } else {
-                $msg = "Error al registrar la cita. Intenta de nuevo.";
+                $msg = "Ese cupo ya fue reservado. Por favor elige otra hora.";
                 $msg_type = "error";
             }
             $stmt->close();
@@ -67,14 +124,6 @@ if ($res_b) {
 }
 
 $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
-
-// Servicios disponibles
-$servicios = [
-    "Corte Clásico"    => "30 min — Bs 8",
-    "Barba Premium"    => "20 min — Bs 6",
-    "Combo AlCorte Pro"=> "50 min — Bs 12",
-    "Corte + Cejas"    => "40 min — Bs 10",
-];
 ?>
 <!DOCTYPE html>
 <html lang="es">

@@ -1,6 +1,4 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 require_once '../backend/config/config.php';
 
 $allowed_roles = ['admin', 'superadmin', 'gerente'];
@@ -94,6 +92,11 @@ if ($res_conf) {
         $config[$conf_row['clave']] = $conf_row['valor'];
     }
 }
+
+// Tiendas reales (excluye el ámbito Administración id=1) para asignar barberos
+$tiendas_arr = [];
+$res_t = $conn->query("SELECT id, nombre FROM sucursales WHERE id > 1 AND activo = 1 ORDER BY nombre");
+if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -678,10 +681,20 @@ if ($res_conf) {
                                         </td>
                                         <td>
                                             <?php if ($row['estado_pago'] == 'pendiente'): ?>
-                                                <span class="badge badge-pending">Pendiente</span>
+                                                <span class="badge badge-pending">Pago Pendiente</span>
                                             <?php else: ?>
-                                                <span class="badge badge-verified">Verificado</span>
+                                                <span class="badge badge-verified">Pago OK</span>
                                             <?php endif; ?>
+                                            <?php
+                                                $ce = $row['estado'] ?? 'programada';
+                                                $ce_style = [
+                                                    'programada' => 'background:#eef2ff;color:#3730a3',
+                                                    'completada' => 'background:#dcfce7;color:#166534',
+                                                    'cancelada'  => 'background:#fee2e2;color:#991b1b',
+                                                ][$ce] ?? 'background:#f3f4f6;color:#6b7280';
+                                            ?>
+                                            <br>
+                                            <span class="badge" style="margin-top:4px;display:inline-block;<?php echo $ce_style; ?>"><?php echo ucfirst($ce); ?></span>
                                         </td>
                                         <td>
                                             <?php if ($row['estado_pago'] == 'pendiente'): ?>
@@ -745,6 +758,19 @@ if ($res_conf) {
                                         <label class="form-label">Nombre</label>
                                         <input type="text" id="barb_nombre" name="nombre" class="form-input" placeholder="Ej. Joshy" required>
                                     </div>
+
+                                    <?php if (!$is_scoped): ?>
+                                    <div class="form-group">
+                                        <label class="form-label">Tienda</label>
+                                        <select id="barb_sucursal" name="sucursal_id" class="form-select" required>
+                                            <?php if (empty($tiendas_arr)): ?>
+                                                <option value="">— Crea una tienda primero —</option>
+                                            <?php else: foreach ($tiendas_arr as $t): ?>
+                                                <option value="<?php echo $t['id']; ?>"><?php echo htmlspecialchars($t['nombre']); ?></option>
+                                            <?php endforeach; endif; ?>
+                                        </select>
+                                    </div>
+                                    <?php endif; ?>
 
                                     <div class="form-group">
                                         <label class="form-label">Hora Entrada</label>
