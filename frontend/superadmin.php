@@ -9,6 +9,9 @@ if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
 $page = $_GET['page'] ?? 'dashboard';
 $msg  = isset($_GET['msg']) ? htmlspecialchars($_GET['msg']) : '';
 
+$suscripcion_inicio_hoy = date('Y-m-d');
+$suscripcion_fin_mes = (new DateTime($suscripcion_inicio_hoy))->modify('+1 month')->format('Y-m-d');
+
 // === KPIs MACRO ===
 $total_citas      = $conn->query("SELECT COUNT(*) as t FROM citas")->fetch_assoc()['t'];
 $total_sucursales = $conn->query("SELECT COUNT(*) as t FROM sucursales WHERE id > 1")->fetch_assoc()['t'];
@@ -58,9 +61,9 @@ if ($has_subs && $has_pagos) {
         JOIN planes pl ON s.plan_id = pl.id
         ORDER BY s.fecha_vencimiento ASC");
     if ($r) while ($row = $r->fetch_assoc()) $subs_arr[] = $row;
-    $r2 = $conn->query("SELECT DATE_FORMAT(fecha_pago,'%b %Y') as mes, SUM(monto) as total
+    $r2 = $conn->query("SELECT DATE_FORMAT(MIN(fecha_pago), '%b %Y') as mes, SUM(monto) as total
         FROM pagos_suscripcion WHERE fecha_pago >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-        GROUP BY DATE_FORMAT(fecha_pago,'%Y-%m') ORDER BY fecha_pago ASC");
+        GROUP BY DATE_FORMAT(fecha_pago, '%Y-%m') ORDER BY MIN(fecha_pago) ASC");
     if ($r2) while ($row = $r2->fetch_assoc()) {
         $ingresos_por_mes_labels[] = $row['mes'];
         $ingresos_por_mes_vals[]   = (float)$row['total'];
@@ -223,6 +226,82 @@ $plan_colors = [
         .form-textarea{resize:vertical;min-height:72px}
         .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
+        /* ── SHOP FORM UX ── */
+        .form-section{margin-bottom:22px;padding-bottom:22px;border-bottom:1px solid #f1f5f9}
+        .form-section:last-of-type{border-bottom:none;padding-bottom:0;margin-bottom:0}
+        .form-section-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+        .form-step{width:26px;height:26px;border-radius:50%;background:#0f172a;color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .form-section-title{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.12em;color:#0f172a}
+        .form-section-hint{font-size:12px;color:#94a3b8;margin-top:2px}
+        .plan-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
+        .plan-option{position:relative;border:2px solid #e2e8f0;border-radius:1rem;padding:14px 12px;cursor:pointer;background:#fff;transition:all .15s;text-align:left}
+        .plan-option:hover{border-color:#cbd5e1;background:#fafafa}
+        .plan-option.selected{border-color:#b49363;background:rgba(180,147,99,.06);box-shadow:0 0 0 3px rgba(180,147,99,.12)}
+        .plan-option input{position:absolute;opacity:0;pointer-events:none}
+        .plan-option-name{font-size:13px;font-weight:900;color:#0f172a;margin-bottom:4px}
+        .plan-option-price{font-size:12px;font-weight:800;color:#b49363;font-family:Monaco,monospace}
+        .plan-option-meta{font-size:10px;color:#94a3b8;margin-top:6px;line-height:1.4}
+        .plan-option-check{position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;border:2px solid #e2e8f0;background:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;color:transparent}
+        .plan-option.selected .plan-option-check{border-color:#b49363;background:#b49363;color:#fff}
+        .monthly-renewal{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;margin-top:12px}
+        .monthly-renewal i{color:#16a34a;font-size:18px;flex-shrink:0}
+        .monthly-renewal strong{display:block;font-size:13px;font-weight:800;color:#166534}
+        .monthly-renewal span{font-size:12px;color:#15803d}
+        .plan-option-badge{display:inline-block;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;background:#f0fdf4;color:#166534;padding:2px 7px;border-radius:2rem;margin-bottom:6px}
+        .sin-plan-toggle{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.75rem;cursor:pointer;margin-bottom:12px;transition:all .15s}
+        .sin-plan-toggle:has(input:checked){background:#fffbeb;border-color:#fde68a}
+        .sin-plan-toggle input{width:16px;height:16px;accent-color:#b49363;cursor:pointer}
+        .sin-plan-toggle span{font-size:13px;font-weight:700;color:#374151}
+        .sin-plan-toggle small{display:block;font-size:11px;color:#94a3b8;font-weight:500;margin-top:2px}
+        .plan-fields-wrap{transition:opacity .2s, max-height .2s}
+        .plan-fields-wrap.is-hidden{opacity:.45;pointer-events:none;filter:grayscale(.2)}
+        .form-submit-row{display:flex;gap:8px;margin-top:18px;padding-top:18px;border-top:1px solid #f1f5f9}
+        .shop-table-plan{display:flex;flex-direction:column;gap:4px}
+        .shop-view-tabs{display:flex;gap:8px;margin-bottom:24px;padding:6px;background:#fff;border:1px solid #e2e8f0;border-radius:1rem;width:fit-content;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+        .shop-tab{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:none;border-radius:.75rem;background:transparent;color:#64748b;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:all .15s}
+        .shop-tab:hover{color:#0f172a;background:#f8fafc}
+        .shop-tab.active{background:#0f172a;color:#fff;box-shadow:0 4px 12px rgba(15,23,42,.15)}
+        .shop-tab .tab-count{background:rgba(255,255,255,.15);padding:2px 8px;border-radius:2rem;font-size:10px;font-weight:900}
+        .shop-tab:not(.active) .tab-count{background:#f1f5f9;color:#64748b}
+        .shop-panel{display:none}
+        .shop-panel.active{display:block}
+        .shop-form-card{max-width:820px}
+        .list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+        /* ── PLANES PAGE ── */
+        .plans-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+        .plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
+        .plan-card{background:#fff;border:1px solid #e2e8f0;border-radius:1.25rem;padding:24px;position:relative;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.04);display:flex;flex-direction:column;min-height:100%}
+        .plan-card:hover{box-shadow:0 8px 24px rgba(15,23,42,.08);transform:translateY(-2px)}
+        .plan-card.accent-gold{border-top:4px solid #b49363}
+        .plan-card.accent-blue{border-top:4px solid #3b82f6}
+        .plan-card.accent-purple{border-top:4px solid #8b5cf6}
+        .plan-card-badge{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.15em;color:#64748b;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+        .plan-card-badge .dot{width:6px;height:6px;border-radius:50%;background:#22c55e}
+        .plan-card-name{font-size:1.35rem;font-weight:900;color:#0f172a;line-height:1.15;margin-bottom:6px}
+        .plan-card-price{font-size:1.75rem;font-weight:900;color:#0f172a;font-family:Monaco,monospace;line-height:1}
+        .plan-card-price small{font-size:12px;font-weight:600;color:#94a3b8;font-family:Inter,sans-serif}
+        .plan-card-desc{font-size:12px;color:#64748b;line-height:1.5;margin:12px 0 16px;flex:1}
+        .plan-card-limits{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+        .plan-limit-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:.5rem;font-size:11px;font-weight:700;color:#475569}
+        .plan-limit-chip i{color:#b49363;font-size:10px}
+        .plan-card-usage{font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:14px;padding-top:14px;border-top:1px solid #f1f5f9}
+        .plan-card-usage strong{color:#0f172a}
+        .plan-card-actions{display:flex;gap:8px;margin-top:auto}
+        .plan-card-actions .btn{flex:1;justify-content:center}
+        .plan-form-layout{display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start}
+        .plan-preview-card{background:linear-gradient(145deg,#0f172a 0%,#1e293b 100%);border-radius:1.25rem;padding:24px;color:#fff;position:sticky;top:88px}
+        .plan-preview-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.2em;color:rgba(255,255,255,.45);margin-bottom:12px}
+        .plan-preview-name{font-size:1.5rem;font-weight:900;line-height:1.1;margin-bottom:8px;min-height:1.1em}
+        .plan-preview-price{font-size:1.4rem;font-weight:900;color:#b49363;font-family:Monaco,monospace;margin-bottom:16px;min-height:1.4em}
+        .plan-preview-price span{font-size:12px;color:rgba(255,255,255,.5);font-family:Inter,sans-serif;font-weight:500}
+        .plan-preview-features{font-size:12px;color:rgba(255,255,255,.65);line-height:1.8}
+        .plan-preview-features div{display:flex;align-items:center;gap:8px}
+        .plan-preview-features i{color:#b49363;font-size:10px;width:14px}
+        .price-input-wrap{position:relative}
+        .price-input-wrap .prefix{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;font-weight:700;font-size:13px;pointer-events:none}
+        .price-input-wrap .form-input{padding-left:28px}
+
         /* ── TOTAL PAID MINI CARD ── */
         .total-card{background:#fff;border:1px solid #e2e8f0;border-radius:1.25rem;padding:20px 24px;display:flex;justify-content:space-between;align-items:center}
         .total-card-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.15em;color:#94a3b8}
@@ -248,6 +327,9 @@ $plan_colors = [
             .grid-2,.grid-equal,.grid-3{grid-template-columns:1fr}
             .form-row{grid-template-columns:1fr}
             .content{padding:16px}
+            .plan-form-layout{grid-template-columns:1fr}
+            .plan-preview-card{position:static}
+            .plans-grid{grid-template-columns:1fr}
         }
         @media(max-width:640px){
             .sidebar{position:fixed;left:-100%;transition:left .3s}
@@ -435,7 +517,7 @@ $plan_colors = [
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Plan</label>
+                            <label class="form-label">Plan mensual</label>
                             <select name="sub_plan" class="form-select" required>
                                 <option value="">— Seleccionar plan —</option>
                                 <?php foreach($planes_arr as $p): ?>
@@ -443,14 +525,15 @@ $plan_colors = [
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label">Desde</label>
-                                <input type="date" name="sub_inicio" class="form-input" value="<?php echo date('Y-m-d'); ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Hasta</label>
-                                <input type="date" name="sub_fin" class="form-input" value="<?php echo date('Y-m-d', strtotime('+30 days')); ?>" required>
+                        <div class="form-group">
+                            <label class="form-label">Inicio del periodo</label>
+                            <input type="date" name="sub_inicio" id="assign_sub_inicio" class="form-input" value="<?php echo $suscripcion_inicio_hoy; ?>" required>
+                        </div>
+                        <div class="monthly-renewal">
+                            <i class="fas fa-calendar-check"></i>
+                            <div>
+                                <strong>Suscripción mensual</strong>
+                                <span>Renueva el <b id="assign_sub_fin_label"><?php echo date('d/m/Y', strtotime($suscripcion_fin_mes)); ?></b></span>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-gold btn-full">Asignar Plan</button>
@@ -551,6 +634,18 @@ $plan_colors = [
                 scales:{y:{beginAtZero:true,grid:{color:'#f1f5f9'},ticks:{color:'#94a3b8',callback:v=>'$'+v}},
                         x:{grid:{display:false},ticks:{color:'#94a3b8'}}}}
         });
+        (function(){
+            const inicio = document.getElementById('assign_sub_inicio');
+            const label = document.getElementById('assign_sub_fin_label');
+            if (!inicio || !label) return;
+            inicio.addEventListener('change', () => {
+                const d = new Date(inicio.value + 'T12:00:00');
+                const day = d.getDate();
+                d.setMonth(d.getMonth() + 1);
+                if (d.getDate() !== day) d.setDate(0);
+                label.textContent = d.toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit', year:'numeric' });
+            });
+        })();
         </script>
 
         <!-- ══════════════ SUCURSALES ══════════════ -->
@@ -558,53 +653,88 @@ $plan_colors = [
             $admins_map = [];
             $r = $conn->query("SELECT id, nombre, usuario, telefono, sucursal_id FROM usuarios WHERE rol='admin' AND sucursal_id > 0");
             if ($r) while ($row = $r->fetch_assoc()) $admins_map[$row['sucursal_id']] = $row;
+
+            $subs_map = [];
+            if ($has_subs) {
+                $r = $conn->query("SELECT sub.sucursal_id, sub.plan_id, sub.fecha_inicio, sub.fecha_vencimiento, sub.estado,
+                    pl.nombre as plan_nombre, pl.precio_mensual, pl.max_barberos, pl.max_citas_mes
+                    FROM suscripciones sub
+                    JOIN planes pl ON pl.id = sub.plan_id");
+                if ($r) while ($row = $r->fetch_assoc()) $subs_map[$row['sucursal_id']] = $row;
+            }
+            $shop_step_plan = ($has_planes && !empty($planes_arr)) ? 2 : 0;
+            $shop_step_admin = $shop_step_plan ? 3 : 2;
         ?>
 
         <div class="page-header">
             <h1 class="page-title">Gestión de <span>Tiendas</span></h1>
-            <p class="page-subtitle">Registro y administración de tiendas y sus administradores.</p>
+            <p class="page-subtitle">Administra tus tiendas registradas o crea una nueva con su plan.</p>
         </div>
 
-        <div class="grid-2">
-            <div class="card" style="align-self:start;margin-bottom:0">
-                <div class="card-header" id="suc-form-title"><h3>Registrar Tienda</h3></div>
-                <div class="card-body">
-                    <form action="../backend/processing/superadmin.php" method="POST">
-                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                        <input type="hidden" id="shop_action" name="action" value="add_sucursal">
-                        <input type="hidden" id="shop_id" name="id" value="">
-                        <div class="form-group">
-                            <label class="form-label">Nombre Comercial</label>
-                            <input type="text" id="shop_name" name="shop_name" class="form-input" placeholder="Ej. Tienda Norte" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Dirección</label>
-                            <textarea id="shop_address" name="shop_address" class="form-textarea" placeholder="Ubicación detallada" required></textarea>
-                        </div>
-                        <div style="display:flex;gap:8px">
-                            <button type="submit" class="btn btn-gold" style="flex:1;justify-content:center">Guardar</button>
-                            <button type="button" onclick="resetSucForm()" class="btn btn-ghost">Cancelar</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+        <div class="shop-view-tabs" role="tablist">
+            <button type="button" class="shop-tab active" data-panel="list" id="shopTabList">
+                <i class="fas fa-list"></i> Lista de tiendas
+                <span class="tab-count"><?php echo count($sucursales_arr); ?></span>
+            </button>
+            <button type="button" class="shop-tab" data-panel="form" id="shopTabForm">
+                <i class="fas fa-plus-circle"></i> Registrar tienda
+            </button>
+        </div>
 
+        <!-- ── LISTA DE TIENDAS ── -->
+        <div id="shopPanelList" class="shop-panel active">
             <div class="card" style="margin-bottom:0">
-                <div class="card-header"><h3>Tiendas en el Sistema</h3></div>
+                <div class="card-header">
+                    <div class="list-toolbar" style="width:100%">
+                        <div>
+                            <h3>Tiendas en el Sistema</h3>
+                            <small><?php echo count($sucursales_arr); ?> registrada<?php echo count($sucursales_arr) !== 1 ? 's' : ''; ?></small>
+                        </div>
+                        <button type="button" class="btn btn-gold" onclick="openShopForm()">
+                            <i class="fas fa-plus"></i> Nueva tienda
+                        </button>
+                    </div>
+                </div>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Tienda</th><th>Administrador</th><th style="text-align:right">Acciones</th></tr></thead>
+                        <thead><tr><th>Tienda</th><th>Plan</th><th>Administrador</th><th style="text-align:right">Acciones</th></tr></thead>
                         <tbody>
                         <?php if(empty($sucursales_arr)): ?>
-                        <tr><td colspan="3" style="text-align:center;padding:40px;color:#94a3b8">Sin tiendas registradas. Crea la primera con el formulario.</td></tr>
+                        <tr><td colspan="4" style="text-align:center;padding:48px 24px;color:#94a3b8">
+                            <div style="font-size:32px;margin-bottom:12px;opacity:.4"><i class="fas fa-store"></i></div>
+                            <div style="font-weight:700;color:#64748b;margin-bottom:4px">Aún no hay tiendas</div>
+                            <div style="font-size:12px;margin-bottom:16px">Registra la primera tienda para comenzar</div>
+                            <button type="button" class="btn btn-gold" onclick="openShopForm()"><i class="fas fa-plus"></i> Registrar tienda</button>
+                        </td></tr>
                         <?php endif; ?>
                         <?php foreach($sucursales_arr as $s):
                             $adm = $admins_map[$s['id']] ?? null;
+                            $sub = $subs_map[$s['id']] ?? null;
+                            $hoy = new DateTime();
+                            $vence = ($sub && $sub['fecha_vencimiento']) ? new DateTime($sub['fecha_vencimiento']) : null;
+                            $vencida = $vence && $vence < $hoy;
                         ?>
                         <tr>
                             <td>
                                 <div style="font-weight:800"><?php echo htmlspecialchars($s['nombre']); ?></div>
-                                <div style="font-size:11px;color:#94a3b8;margin-top:2px"><?php echo htmlspecialchars($s['direccion'] ?? '—'); ?></div>
+                                <div style="font-size:11px;color:#94a3b8;margin-top:2px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="<?php echo htmlspecialchars($s['direccion'] ?? ''); ?>">
+                                    <?php echo htmlspecialchars($s['direccion'] ?? '—'); ?>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="shop-table-plan">
+                                <?php if ($sub): ?>
+                                    <span class="plan-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;width:fit-content">
+                                        <?php echo htmlspecialchars($sub['plan_nombre']); ?>
+                                    </span>
+                                    <span style="font-size:10px;color:<?php echo $vencida ? '#dc2626' : '#64748b'; ?>;font-weight:700">
+                                        <?php if ($vencida): ?>Venció <?php else: ?>Vence <?php endif; ?>
+                                        <?php echo $vence ? $vence->format('d/m/Y') : '—'; ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="status-pill suspended" style="width:fit-content"><span class="dot"></span>Sin plan</span>
+                                <?php endif; ?>
+                                </div>
                             </td>
                             <td>
                                 <?php if ($adm): ?>
@@ -616,8 +746,20 @@ $plan_colors = [
                             </td>
                             <td style="text-align:right">
                                 <div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap">
-                                    <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>')" class="btn btn-ghost btn-sm">
-                                        <i class="fas fa-pen"></i> Tienda
+                                    <button type="button" onclick='editSuc(<?php echo json_encode([
+                                        "id" => $s["id"],
+                                        "nombre" => $s["nombre"],
+                                        "direccion" => $s["direccion"] ?? "",
+                                        "plan_id" => $sub["plan_id"] ?? 0,
+                                        "inicio" => $sub["fecha_inicio"] ?? date("Y-m-d"),
+                                        "fin" => $sub["fecha_vencimiento"] ?? date("Y-m-d", strtotime("+30 days")),
+                                        "sin_plan" => !$sub,
+                                        "adm_id" => $adm["id"] ?? 0,
+                                        "adm_nombre" => $adm["nombre"] ?? "",
+                                        "adm_usuario" => $adm["usuario"] ?? "",
+                                        "adm_telefono" => $adm["telefono"] ?? "",
+                                    ], JSON_HEX_APOS | JSON_HEX_QUOT); ?>)' class="btn btn-ghost btn-sm">
+                                        <i class="fas fa-pen"></i> Editar
                                     </button>
                                     <button onclick="openAdmForm(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>',<?php echo $adm ? $adm['id'] : 0; ?>,'<?php echo htmlspecialchars($adm['nombre']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['usuario']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['telefono']??'',ENT_QUOTES); ?>')"
                                         class="btn btn-sm" style="background:<?php echo $adm?'#dbeafe':'#f0fdf4'; ?>;color:<?php echo $adm?'#1d4ed8':'#166534'; ?>;border:none;cursor:pointer;font-weight:600;font-size:12px;padding:5px 10px;border-radius:6px">
@@ -631,7 +773,7 @@ $plan_colors = [
                                         <button type="submit" class="btn btn-danger btn-sm" title="Quitar admin"><i class="fas fa-user-xmark"></i></button>
                                     </form>
                                     <?php endif; ?>
-                                    <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda?')">
+                                    <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda? Se perderán sus datos.')">
                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                         <input type="hidden" name="action" value="delete_sucursal">
                                         <input type="hidden" name="id" value="<?php echo $s['id']; ?>">
@@ -643,6 +785,145 @@ $plan_colors = [
                         <?php endforeach; ?>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── REGISTRAR / EDITAR TIENDA ── -->
+        <div id="shopPanelForm" class="shop-panel">
+            <div class="card shop-form-card" style="margin-bottom:0">
+                <div class="card-header" id="suc-form-title">
+                    <div>
+                        <h3>Registrar Tienda</h3>
+                        <small id="suc-form-subtitle">Tienda, plan mensual y administrador</small>
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="switchShopPanel('list')">
+                        <i class="fas fa-arrow-left"></i> Volver a la lista
+                    </button>
+                </div>
+                <div class="card-body">
+                    <form action="../backend/processing/superadmin.php" method="POST" id="shopForm">
+                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                        <input type="hidden" id="shop_action" name="action" value="add_sucursal">
+                        <input type="hidden" id="shop_id" name="id" value="">
+                        <input type="hidden" id="shop_plan" name="shop_plan" value="">
+                        <input type="hidden" id="shop_adm_id" name="shop_adm_id" value="">
+
+                        <div class="form-section">
+                            <div class="form-section-head">
+                                <div class="form-step">1</div>
+                                <div>
+                                    <div class="form-section-title">Datos de la tienda</div>
+                                    <div class="form-section-hint">Nombre comercial y ubicación</div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="shop_name"><i class="fas fa-store" style="margin-right:4px;color:#b49363"></i> Nombre comercial</label>
+                                <input type="text" id="shop_name" name="shop_name" class="form-input" placeholder="Ej. Tienda Maracay" required>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0">
+                                <label class="form-label" for="shop_address"><i class="fas fa-location-dot" style="margin-right:4px;color:#b49363"></i> Dirección</label>
+                                <textarea id="shop_address" name="shop_address" class="form-textarea" placeholder="Av. principal, ciudad, referencia..." required></textarea>
+                            </div>
+                        </div>
+
+                        <?php if (!$has_planes || empty($planes_arr)): ?>
+                        <div class="setup-banner" style="margin:0 0 22px">
+                            <i class="fas fa-info-circle"></i>
+                            No hay planes disponibles.
+                            <a href="superadmin.php?page=planes" style="color:#92400e;text-decoration:underline;font-weight:800;margin-left:4px">Créalos aquí →</a>
+                        </div>
+                        <?php endif; ?>
+
+                        <?php if ($has_planes && !empty($planes_arr)): ?>
+                        <div class="form-section">
+                            <div class="form-section-head">
+                                <div class="form-step"><?php echo $shop_step_plan; ?></div>
+                                <div>
+                                    <div class="form-section-title">Plan mensual</div>
+                                    <div class="form-section-hint">Todos los planes se facturan mes a mes</div>
+                                </div>
+                            </div>
+
+                            <label class="sin-plan-toggle" for="shop_sin_plan">
+                                <input type="checkbox" id="shop_sin_plan" name="shop_sin_plan" value="1">
+                                <div>
+                                    <span>Sin plan por ahora</span>
+                                    <small>Podrás asignarlo después desde Estadísticas</small>
+                                </div>
+                            </label>
+
+                            <div class="plan-fields-wrap" id="planFieldsWrap">
+                                <div class="plan-picker" id="planPicker">
+                                    <?php foreach ($planes_arr as $i => $p): ?>
+                                    <label class="plan-option" data-plan-id="<?php echo $p['id']; ?>" data-precio="<?php echo $p['precio_mensual']; ?>">
+                                        <input type="radio" name="shop_plan_radio" value="<?php echo $p['id']; ?>">
+                                        <span class="plan-option-check"><i class="fas fa-check"></i></span>
+                                        <span class="plan-option-badge">Mensual</span>
+                                        <div class="plan-option-name"><?php echo htmlspecialchars($p['nombre']); ?></div>
+                                        <div class="plan-option-price">$<?php echo number_format($p['precio_mensual'], 2); ?>/mes</div>
+                                        <div class="plan-option-meta">
+                                            <?php echo intval($p['max_barberos']); ?> barberos ·
+                                            <?php echo number_format($p['max_citas_mes']); ?> citas/mes
+                                        </div>
+                                    </label>
+                                    <?php endforeach; ?>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom:0">
+                                    <label class="form-label" for="shop_sub_inicio">Inicio del periodo</label>
+                                    <input type="date" id="shop_sub_inicio" name="shop_sub_inicio" class="form-input" value="<?php echo $suscripcion_inicio_hoy; ?>">
+                                </div>
+                                <input type="hidden" id="shop_sub_fin" name="shop_sub_fin" value="<?php echo $suscripcion_fin_mes; ?>">
+                                <div class="monthly-renewal">
+                                    <i class="fas fa-calendar-check"></i>
+                                    <div>
+                                        <strong>Suscripción mensual</strong>
+                                        <span>Renueva el <b id="shop_sub_fin_label"><?php echo date('d/m/Y', strtotime($suscripcion_fin_mes)); ?></b></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <div class="form-section">
+                            <div class="form-section-head">
+                                <div class="form-step"><?php echo $shop_step_admin; ?></div>
+                                <div>
+                                    <div class="form-section-title">Administrador de la tienda</div>
+                                    <div class="form-section-hint">Usuario con acceso al panel de administración</div>
+                                </div>
+                            </div>
+
+                            <div id="adminFieldsWrap">
+                                <div class="form-group">
+                                    <label class="form-label" for="shop_adm_nombre"><i class="fas fa-user" style="margin-right:4px;color:#b49363"></i> Nombre completo</label>
+                                    <input type="text" id="shop_adm_nombre" name="shop_adm_nombre" class="form-input" placeholder="Ej. Juan Pérez" autocomplete="name" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label" for="shop_adm_usuario"><i class="fas fa-at" style="margin-right:4px;color:#b49363"></i> Usuario</label>
+                                        <input type="text" id="shop_adm_usuario" name="shop_adm_usuario" class="form-input" placeholder="Ej. juanp" autocomplete="off" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="shop_adm_telefono"><i class="fas fa-phone" style="margin-right:4px;color:#b49363"></i> Teléfono</label>
+                                        <input type="text" id="shop_adm_telefono" name="shop_adm_telefono" class="form-input" placeholder="Opcional" autocomplete="tel">
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-bottom:0">
+                                    <label class="form-label" for="shop_adm_password" id="shop_adm_pass_lbl"><i class="fas fa-lock" style="margin-right:4px;color:#b49363"></i> Contraseña</label>
+                                    <input type="password" id="shop_adm_password" name="shop_adm_password" class="form-input" placeholder="Mín. 8 caracteres" autocomplete="new-password" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-submit-row">
+                            <button type="submit" class="btn btn-gold" style="flex:1;justify-content:center" id="shopSubmitBtn">
+                                <i class="fas fa-plus-circle"></i> Registrar tienda
+                            </button>
+                            <button type="button" onclick="cancelShopForm()" class="btn btn-ghost">Cancelar</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -687,6 +968,138 @@ $plan_colors = [
         </div>
 
         <script>
+        function switchShopPanel(panel) {
+            document.querySelectorAll('.shop-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.panel === panel);
+            });
+            document.getElementById('shopPanelList').classList.toggle('active', panel === 'list');
+            document.getElementById('shopPanelForm').classList.toggle('active', panel === 'form');
+            const tabForm = document.getElementById('shopTabForm');
+            if (tabForm) {
+                tabForm.innerHTML = panel === 'form' && document.getElementById('shop_id').value
+                    ? '<i class="fas fa-pen"></i> Editar tienda'
+                    : '<i class="fas fa-plus-circle"></i> Registrar tienda';
+            }
+            if (panel === 'form') {
+                document.getElementById('shopPanelForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        function openShopForm() {
+            resetSucForm();
+            switchShopPanel('form');
+            document.getElementById('shop_name').focus();
+        }
+        function cancelShopForm() {
+            resetSucForm();
+            switchShopPanel('list');
+        }
+
+        document.querySelectorAll('.shop-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                if (tab.dataset.panel === 'form') {
+                    if (!document.getElementById('shop_id').value) resetSucForm();
+                } else {
+                    resetSucForm();
+                }
+                switchShopPanel(tab.dataset.panel);
+            });
+        });
+
+        (function(){
+            const sinPlanCb = document.getElementById('shop_sin_plan');
+            const planFields = document.getElementById('planFieldsWrap');
+            const planHidden = document.getElementById('shop_plan');
+            const inicioEl = document.getElementById('shop_sub_inicio');
+            const finEl = document.getElementById('shop_sub_fin');
+            const finLabel = document.getElementById('shop_sub_fin_label');
+            const picker = document.getElementById('planPicker');
+
+            function addOneMonth(dateStr) {
+                const d = new Date(dateStr + 'T12:00:00');
+                const day = d.getDate();
+                d.setMonth(d.getMonth() + 1);
+                if (d.getDate() !== day) d.setDate(0);
+                return d.toISOString().slice(0, 10);
+            }
+
+            function formatDateEs(dateStr) {
+                const [y, m, d] = dateStr.split('-');
+                return `${d}/${m}/${y}`;
+            }
+
+            window.syncShopMonthlyEnd = function() {
+                if (!inicioEl || !finEl) return;
+                const fin = addOneMonth(inicioEl.value || new Date().toISOString().slice(0, 10));
+                finEl.value = fin;
+                if (finLabel) finLabel.textContent = formatDateEs(fin);
+            };
+
+            function selectPlan(planId) {
+                if (!picker || !planHidden) return;
+                planHidden.value = planId || '';
+                picker.querySelectorAll('.plan-option').forEach(opt => {
+                    const active = String(opt.dataset.planId) === String(planId);
+                    opt.classList.toggle('selected', active);
+                    const radio = opt.querySelector('input[type=radio]');
+                    if (radio) radio.checked = active;
+                });
+            }
+
+            function togglePlanFields() {
+                if (!sinPlanCb || !planFields) return;
+                const off = sinPlanCb.checked;
+                planFields.classList.toggle('is-hidden', off);
+                if (off) {
+                    planHidden.value = '';
+                    picker?.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
+                } else if (!planHidden.value && picker) {
+                    const first = picker.querySelector('.plan-option');
+                    if (first) selectPlan(first.dataset.planId);
+                }
+            }
+
+            if (sinPlanCb) sinPlanCb.addEventListener('change', togglePlanFields);
+
+            picker?.addEventListener('click', e => {
+                const opt = e.target.closest('.plan-option');
+                if (!opt || sinPlanCb?.checked) return;
+                selectPlan(opt.dataset.planId);
+            });
+
+            inicioEl?.addEventListener('change', window.syncShopMonthlyEnd);
+
+            document.getElementById('shopForm')?.addEventListener('submit', e => {
+                window.syncShopMonthlyEnd();
+                if (sinPlanCb?.checked) return;
+                if (!planHidden?.value) {
+                    e.preventDefault();
+                    alert('Selecciona un plan o marca "Sin plan por ahora".');
+                }
+            });
+
+            if (picker && planHidden && !planHidden.value) {
+                const first = picker.querySelector('.plan-option');
+                if (first) selectPlan(first.dataset.planId);
+            }
+            togglePlanFields();
+            window.syncShopMonthlyEnd();
+        })();
+
+        function setShopAdminPasswordMode(isEdit, hasAdmin) {
+            const pass = document.getElementById('shop_adm_password');
+            const passLbl = document.getElementById('shop_adm_pass_lbl');
+            if (!pass) return;
+            if (isEdit && hasAdmin) {
+                pass.removeAttribute('required');
+                pass.placeholder = 'Dejar vacío para no cambiar';
+                if (passLbl) passLbl.innerHTML = '<i class="fas fa-lock" style="margin-right:4px;color:#b49363"></i> Nueva contraseña (opcional)';
+            } else {
+                pass.setAttribute('required', '');
+                pass.placeholder = 'Mín. 8 caracteres';
+                if (passLbl) passLbl.innerHTML = '<i class="fas fa-lock" style="margin-right:4px;color:#b49363"></i> Contraseña';
+            }
+        }
+
         function openAdmForm(suc_id, suc_nombre, adm_id, adm_nombre, adm_usuario, adm_telefono) {
             document.getElementById('af_sucursal').value   = suc_id;
             document.getElementById('af_tienda_lbl').value = suc_nombre;
@@ -713,129 +1126,344 @@ $plan_colors = [
         function closeAdmForm() {
             document.getElementById('admFormWrap').style.display = 'none';
         }
-        function editSuc(id,nombre,dir){
-            document.getElementById('shop_id').value=id;
-            document.getElementById('shop_name').value=nombre;
-            document.getElementById('shop_address').value=dir;
-            document.getElementById('shop_action').value='edit_sucursal';
-            document.querySelector('#suc-form-title h3').textContent='Editar Tienda';
+        function editSuc(data){
+            document.getElementById('shop_id').value = data.id;
+            document.getElementById('shop_name').value = data.nombre;
+            document.getElementById('shop_address').value = data.direccion;
+            document.getElementById('shop_action').value = 'edit_sucursal';
+            document.querySelector('#suc-form-title h3').textContent = 'Editar Tienda';
+            document.getElementById('suc-form-subtitle').textContent = 'Modifica tienda, plan y administrador';
+            document.getElementById('shopSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Guardar cambios';
+
+            document.getElementById('shop_adm_id').value = data.adm_id || '';
+            document.getElementById('shop_adm_nombre').value = data.adm_nombre || '';
+            document.getElementById('shop_adm_usuario').value = data.adm_usuario || '';
+            document.getElementById('shop_adm_telefono').value = data.adm_telefono || '';
+            document.getElementById('shop_adm_password').value = '';
+            setShopAdminPasswordMode(true, !!(data.adm_id));
+
+            const sinPlanCb = document.getElementById('shop_sin_plan');
+            const inicioEl = document.getElementById('shop_sub_inicio');
+            const finEl = document.getElementById('shop_sub_fin');
+            if (sinPlanCb) {
+                sinPlanCb.checked = !!data.sin_plan;
+                sinPlanCb.dispatchEvent(new Event('change'));
+            }
+            if (!data.sin_plan && data.plan_id) {
+                document.getElementById('shop_plan').value = data.plan_id;
+                document.querySelectorAll('.plan-option').forEach(opt => {
+                    const active = String(opt.dataset.planId) === String(data.plan_id);
+                    opt.classList.toggle('selected', active);
+                    const radio = opt.querySelector('input[type=radio]');
+                    if (radio) radio.checked = active;
+                });
+            }
+            if (inicioEl && data.inicio) inicioEl.value = data.inicio;
+            if (finEl && data.fin) finEl.value = data.fin;
+            if (typeof window.syncShopMonthlyEnd === 'function') window.syncShopMonthlyEnd();
+
+            switchShopPanel('form');
             document.getElementById('shop_name').focus();
         }
         function resetSucForm(){
-            document.getElementById('shop_id').value='';
-            document.getElementById('shop_name').value='';
-            document.getElementById('shop_address').value='';
-            document.getElementById('shop_action').value='add_sucursal';
-            document.querySelector('#suc-form-title h3').textContent='Registrar Tienda';
+            document.getElementById('shop_id').value = '';
+            document.getElementById('shop_name').value = '';
+            document.getElementById('shop_address').value = '';
+            document.getElementById('shop_action').value = 'add_sucursal';
+            document.querySelector('#suc-form-title h3').textContent = 'Registrar Tienda';
+            document.getElementById('suc-form-subtitle').textContent = 'Tienda, plan mensual y administrador';
+            document.getElementById('shopSubmitBtn').innerHTML = '<i class="fas fa-plus-circle"></i> Registrar tienda';
+            document.getElementById('shop_adm_id').value = '';
+            document.getElementById('shop_adm_nombre').value = '';
+            document.getElementById('shop_adm_usuario').value = '';
+            document.getElementById('shop_adm_telefono').value = '';
+            document.getElementById('shop_adm_password').value = '';
+            setShopAdminPasswordMode(false, false);
+
+            const sinPlanCb = document.getElementById('shop_sin_plan');
+            if (sinPlanCb) { sinPlanCb.checked = false; sinPlanCb.dispatchEvent(new Event('change')); }
+
+            const inicioEl = document.getElementById('shop_sub_inicio');
+            const finEl = document.getElementById('shop_sub_fin');
+            const today = new Date().toISOString().slice(0,10);
+            if (inicioEl) inicioEl.value = today;
+            if (typeof window.syncShopMonthlyEnd === 'function') window.syncShopMonthlyEnd();
+            else if (finEl) {
+                const d = new Date(today + 'T12:00:00');
+                d.setMonth(d.getMonth() + 1);
+                finEl.value = d.toISOString().slice(0,10);
+            }
+
+            const tabForm = document.getElementById('shopTabForm');
+            if (tabForm) tabForm.innerHTML = '<i class="fas fa-plus-circle"></i> Registrar tienda';
         }
         </script>
 
         <!-- ══════════════ PLANES ══════════════ -->
-        <?php elseif($page == 'planes'): ?>
+        <?php elseif($page == 'planes'):
+            $plan_usage = [];
+            if ($has_subs) {
+                $r = $conn->query("SELECT plan_id, COUNT(*) as c FROM suscripciones GROUP BY plan_id");
+                if ($r) while ($row = $r->fetch_assoc()) $plan_usage[intval($row['plan_id'])] = intval($row['c']);
+            }
+            $plan_accents = ['accent-blue', 'accent-purple', 'accent-gold'];
+        ?>
 
         <div class="page-header">
-            <h1 class="page-title">Plan de <span>Facturación</span></h1>
-            <p class="page-subtitle">Define los planes de suscripción disponibles para los negocios.</p>
+            <h1 class="page-title">Planes de <span>Facturación</span></h1>
+            <p class="page-subtitle">Suscripciones mensuales que puedes asignar a cada tienda.</p>
         </div>
 
-        <div class="grid-2">
-            <div class="card" style="align-self:start;margin-bottom:0">
-                <div class="card-header" id="plan-form-title"><h3>Crear Plan</h3></div>
-                <div class="card-body">
-                    <form action="../backend/processing/superadmin.php" method="POST">
-                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                        <input type="hidden" id="plan_action" name="action" value="add_plan">
-                        <input type="hidden" id="plan_id" name="plan_id" value="">
-                        <div class="form-group">
-                            <label class="form-label">Nombre del Plan</label>
-                            <input type="text" id="plan_nombre" name="plan_nombre" class="form-input" placeholder="Ej. Profesional" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Precio Mensual ($)</label>
-                            <input type="number" id="plan_precio" name="plan_precio" class="form-input" placeholder="0.00" step="0.01" min="0" required>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label">Máx. Barberos</label>
-                                <input type="number" id="plan_max_barberos" name="plan_max_barberos" class="form-input" value="3" min="1" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Máx. Citas/mes</label>
-                                <input type="number" id="plan_max_citas" name="plan_max_citas" class="form-input" value="100" min="1" required>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Descripción</label>
-                            <textarea id="plan_descripcion" name="plan_descripcion" class="form-textarea" placeholder="Descripción breve del plan"></textarea>
-                        </div>
-                        <div style="display:flex;gap:8px">
-                            <button type="submit" class="btn btn-gold" style="flex:1;justify-content:center">Guardar Plan</button>
-                            <button type="button" onclick="resetPlan()" class="btn btn-ghost">Cancelar</button>
-                        </div>
-                    </form>
+        <div class="plans-kpi">
+            <div class="stat-card gold">
+                <div class="stat-label">Planes activos</div>
+                <div class="stat-value"><?php echo count($planes_arr); ?></div>
+            </div>
+            <div class="stat-card blue">
+                <div class="stat-label">Tiendas suscritas</div>
+                <div class="stat-value"><?php echo array_sum($plan_usage); ?></div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Desde</div>
+                <div class="stat-value" style="font-size:1.25rem">
+                    <?php
+                    $min_precio = !empty($planes_arr) ? min(array_column($planes_arr, 'precio_mensual')) : 0;
+                    echo $min_precio > 0 ? '$'.number_format($min_precio, 0) : '—';
+                    ?>
+                    <small>/mes</small>
                 </div>
             </div>
+        </div>
 
-            <div>
-                <?php if(empty($planes_arr)): ?>
-                    <div style="text-align:center;padding:60px;color:#94a3b8">
-                        <i class="fas fa-layer-group" style="font-size:40px;margin-bottom:16px;display:block"></i>
-                        <p style="font-weight:700">Sin planes registrados.</p>
-                        <p style="font-size:13px;margin-top:4px">Crea el primero con el formulario.</p>
-                    </div>
-                <?php else: ?>
-                <?php $pi=0; foreach($planes_arr as $plan): $pc=$plan_colors[$pi%3]; $pi++; ?>
-                <!-- Dark plan card al-turno style -->
-                <div class="plan-dark-card" style="margin-bottom:16px">
-                    <div class="plan-dark-actions">
-                        <button onclick="editPlan(<?php echo htmlspecialchars(json_encode($plan),ENT_QUOTES); ?>)" class="btn btn-ghost btn-sm" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.15)">
-                            <i class="fas fa-pen"></i>
+        <div class="shop-view-tabs" role="tablist">
+            <button type="button" class="shop-tab active" data-panel="list" id="planTabList">
+                <i class="fas fa-layer-group"></i> Catálogo
+                <span class="tab-count"><?php echo count($planes_arr); ?></span>
+            </button>
+            <button type="button" class="shop-tab" data-panel="form" id="planTabForm">
+                <i class="fas fa-plus-circle"></i> Crear plan
+            </button>
+        </div>
+
+        <!-- Lista de planes -->
+        <div id="planPanelList" class="shop-panel active">
+            <div class="card" style="margin-bottom:0">
+                <div class="card-header">
+                    <div class="list-toolbar" style="width:100%">
+                        <div>
+                            <h3>Catálogo de planes</h3>
+                            <small>Todos los planes son de facturación mensual</small>
+                        </div>
+                        <button type="button" class="btn btn-gold" onclick="openPlanForm()">
+                            <i class="fas fa-plus"></i> Nuevo plan
                         </button>
-                        <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar plan?')">
-                            <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                            <input type="hidden" name="action" value="delete_plan">
-                            <input type="hidden" name="id" value="<?php echo $plan['id']; ?>">
-                            <button type="submit" class="btn btn-danger btn-sm" style="background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.2)">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </form>
-                    </div>
-                    <div class="plan-dark-label">Plan de Suscripción</div>
-                    <div class="plan-dark-name"><?php echo htmlspecialchars($plan['nombre']); ?></div>
-                    <div class="plan-dark-price">$<?php echo number_format($plan['precio_mensual'],2); ?><span style="font-size:13px;color:#94a3b8;font-family:Inter,sans-serif;font-weight:500">/mes</span></div>
-                    <div class="plan-dark-features">
-                        <div class="plan-dark-feature"><i class="fas fa-check-circle"></i> Hasta <?php echo $plan['max_barberos']; ?> barberos activos</div>
-                        <div class="plan-dark-feature"><i class="fas fa-check-circle"></i> <?php echo number_format($plan['max_citas_mes']); ?> citas por mes</div>
-                        <?php if($plan['descripcion']): ?>
-                        <div class="plan-dark-feature" style="margin-top:4px;color:rgba(255,255,255,.4)"><i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($plan['descripcion']); ?></div>
-                        <?php endif; ?>
                     </div>
                 </div>
-                <?php endforeach; endif; ?>
+                <div class="card-body">
+                    <?php if(empty($planes_arr)): ?>
+                    <div style="text-align:center;padding:56px 24px;color:#94a3b8">
+                        <div style="font-size:40px;margin-bottom:14px;opacity:.35"><i class="fas fa-layer-group"></i></div>
+                        <div style="font-weight:800;color:#64748b;font-size:15px;margin-bottom:6px">Aún no hay planes</div>
+                        <div style="font-size:13px;margin-bottom:20px">Crea el primero para asignarlo a las tiendas</div>
+                        <button type="button" class="btn btn-gold" onclick="openPlanForm()"><i class="fas fa-plus"></i> Crear plan</button>
+                    </div>
+                    <?php else: ?>
+                    <div class="plans-grid">
+                        <?php $pi = 0; foreach($planes_arr as $plan):
+                            $accent = $plan_accents[$pi % 3];
+                            $usage = $plan_usage[$plan['id']] ?? 0;
+                            $pi++;
+                        ?>
+                        <article class="plan-card <?php echo $accent; ?>">
+                            <div class="plan-card-badge"><span class="dot"></span> Mensual</div>
+                            <div class="plan-card-name"><?php echo htmlspecialchars($plan['nombre']); ?></div>
+                            <div class="plan-card-price">$<?php echo number_format($plan['precio_mensual'], 2); ?><small>/mes</small></div>
+                            <?php if(!empty($plan['descripcion'])): ?>
+                            <p class="plan-card-desc"><?php echo htmlspecialchars($plan['descripcion']); ?></p>
+                            <?php else: ?>
+                            <p class="plan-card-desc" style="font-style:italic;opacity:.7">Sin descripción</p>
+                            <?php endif; ?>
+                            <div class="plan-card-limits">
+                                <span class="plan-limit-chip"><i class="fas fa-user"></i> <?php echo intval($plan['max_barberos']); ?> barberos</span>
+                                <span class="plan-limit-chip"><i class="fas fa-calendar-check"></i> <?php echo number_format($plan['max_citas_mes']); ?> citas/mes</span>
+                            </div>
+                            <div class="plan-card-usage">
+                                <strong><?php echo $usage; ?></strong> tienda<?php echo $usage !== 1 ? 's' : ''; ?> con este plan
+                            </div>
+                            <div class="plan-card-actions">
+                                <button type="button" onclick='editPlan(<?php echo json_encode($plan, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)' class="btn btn-ghost btn-sm">
+                                    <i class="fas fa-pen"></i> Editar
+                                </button>
+                                <form action="../backend/processing/superadmin.php" method="POST" style="flex:1;display:flex" onsubmit="return confirm('¿Eliminar el plan «<?php echo htmlspecialchars($plan['nombre'], ENT_QUOTES); ?>»?')">
+                                    <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                    <input type="hidden" name="action" value="delete_plan">
+                                    <input type="hidden" name="id" value="<?php echo $plan['id']; ?>">
+                                    <button type="submit" class="btn btn-danger btn-sm" style="width:100%;justify-content:center" <?php echo $usage > 0 ? 'disabled title="Tiene tiendas suscritas"' : ''; ?>>
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </article>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
+
+        <!-- Crear / editar plan -->
+        <div id="planPanelForm" class="shop-panel">
+            <div class="card" style="margin-bottom:0">
+                <div class="card-header" id="plan-form-title">
+                    <div>
+                        <h3>Crear Plan</h3>
+                        <small id="plan-form-subtitle">Define nombre, precio mensual y límites</small>
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="switchPlansPanel('list')">
+                        <i class="fas fa-arrow-left"></i> Volver al catálogo
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="plan-form-layout">
+                        <form action="../backend/processing/superadmin.php" method="POST" id="planForm">
+                            <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                            <input type="hidden" id="plan_action" name="action" value="add_plan">
+                            <input type="hidden" id="plan_id" name="plan_id" value="">
+
+                            <div class="form-group">
+                                <label class="form-label" for="plan_nombre"><i class="fas fa-tag" style="margin-right:4px;color:#b49363"></i> Nombre del plan</label>
+                                <input type="text" id="plan_nombre" name="plan_nombre" class="form-input" placeholder="Ej. Profesional" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="plan_precio"><i class="fas fa-dollar-sign" style="margin-right:4px;color:#b49363"></i> Precio mensual</label>
+                                <div class="price-input-wrap">
+                                    <span class="prefix">$</span>
+                                    <input type="number" id="plan_precio" name="plan_precio" class="form-input" placeholder="59.99" step="0.01" min="0" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="plan_max_barberos"><i class="fas fa-users" style="margin-right:4px;color:#b49363"></i> Máx. barberos</label>
+                                    <input type="number" id="plan_max_barberos" name="plan_max_barberos" class="form-input" value="3" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="plan_max_citas"><i class="fas fa-calendar" style="margin-right:4px;color:#b49363"></i> Máx. citas/mes</label>
+                                    <input type="number" id="plan_max_citas" name="plan_max_citas" class="form-input" value="100" min="1" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="plan_descripcion"><i class="fas fa-align-left" style="margin-right:4px;color:#b49363"></i> Descripción</label>
+                                <textarea id="plan_descripcion" name="plan_descripcion" class="form-textarea" placeholder="Ideal para barberías en crecimiento..." rows="3"></textarea>
+                            </div>
+                            <div class="form-submit-row" style="margin-top:0;padding-top:0;border-top:none">
+                                <button type="submit" class="btn btn-gold" style="flex:1;justify-content:center" id="planSubmitBtn">
+                                    <i class="fas fa-save"></i> Guardar plan
+                                </button>
+                                <button type="button" onclick="cancelPlanForm()" class="btn btn-ghost">Cancelar</button>
+                            </div>
+                        </form>
+
+                        <aside class="plan-preview-card" aria-hidden="true">
+                            <div class="plan-preview-label">Vista previa</div>
+                            <div class="plan-preview-name" id="preview_nombre">Nombre del plan</div>
+                            <div class="plan-preview-price" id="preview_precio">$0.00 <span>/mes</span></div>
+                            <div class="plan-preview-features">
+                                <div><i class="fas fa-check-circle"></i> Facturación mensual</div>
+                                <div><i class="fas fa-check-circle"></i> <span id="preview_barberos">3</span> barberos</div>
+                                <div><i class="fas fa-check-circle"></i> <span id="preview_citas">100</span> citas/mes</div>
+                                <div id="preview_desc_wrap" style="display:none;margin-top:8px;opacity:.75"><i class="fas fa-info-circle"></i> <span id="preview_desc"></span></div>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script>
+        function switchPlansPanel(panel) {
+            document.querySelectorAll('#planTabList, #planTabForm').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.panel === panel);
+            });
+            document.getElementById('planPanelList').classList.toggle('active', panel === 'list');
+            document.getElementById('planPanelForm').classList.toggle('active', panel === 'form');
+            const tabForm = document.getElementById('planTabForm');
+            if (tabForm) {
+                tabForm.innerHTML = panel === 'form' && document.getElementById('plan_id').value
+                    ? '<i class="fas fa-pen"></i> Editar plan'
+                    : '<i class="fas fa-plus-circle"></i> Crear plan';
+            }
+            if (panel === 'form') {
+                document.getElementById('planPanelForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        function openPlanForm() {
+            resetPlan();
+            switchPlansPanel('form');
+            document.getElementById('plan_nombre').focus();
+        }
+        function cancelPlanForm() {
+            resetPlan();
+            switchPlansPanel('list');
+        }
+        document.getElementById('planTabList')?.addEventListener('click', () => { resetPlan(); switchPlansPanel('list'); });
+        document.getElementById('planTabForm')?.addEventListener('click', () => {
+            if (!document.getElementById('plan_id').value) resetPlan();
+            switchPlansPanel('form');
+        });
+
+        function updatePlanPreview() {
+            const nombre = document.getElementById('plan_nombre')?.value.trim() || 'Nombre del plan';
+            const precio = parseFloat(document.getElementById('plan_precio')?.value) || 0;
+            const barberos = document.getElementById('plan_max_barberos')?.value || '3';
+            const citas = document.getElementById('plan_max_citas')?.value || '100';
+            const desc = document.getElementById('plan_descripcion')?.value.trim() || '';
+            document.getElementById('preview_nombre').textContent = nombre;
+            document.getElementById('preview_precio').innerHTML = '$' + precio.toFixed(2) + ' <span>/mes</span>';
+            document.getElementById('preview_barberos').textContent = barberos;
+            document.getElementById('preview_citas').textContent = Number(citas).toLocaleString();
+            const descWrap = document.getElementById('preview_desc_wrap');
+            if (desc) {
+                descWrap.style.display = 'block';
+                document.getElementById('preview_desc').textContent = desc;
+            } else {
+                descWrap.style.display = 'none';
+            }
+        }
+        ['plan_nombre','plan_precio','plan_max_barberos','plan_max_citas','plan_descripcion'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', updatePlanPreview);
+        });
+
         function editPlan(p){
-            document.getElementById('plan_id').value=p.id;
-            document.getElementById('plan_nombre').value=p.nombre;
-            document.getElementById('plan_precio').value=p.precio_mensual;
-            document.getElementById('plan_max_barberos').value=p.max_barberos;
-            document.getElementById('plan_max_citas').value=p.max_citas_mes;
-            document.getElementById('plan_descripcion').value=p.descripcion||'';
-            document.getElementById('plan_action').value='edit_plan';
-            document.querySelector('#plan-form-title h3').textContent='Editar Plan';
-            window.scrollTo({top:0,behavior:'smooth'});
+            document.getElementById('plan_id').value = p.id;
+            document.getElementById('plan_nombre').value = p.nombre;
+            document.getElementById('plan_precio').value = p.precio_mensual;
+            document.getElementById('plan_max_barberos').value = p.max_barberos;
+            document.getElementById('plan_max_citas').value = p.max_citas_mes;
+            document.getElementById('plan_descripcion').value = p.descripcion || '';
+            document.getElementById('plan_action').value = 'edit_plan';
+            document.querySelector('#plan-form-title h3').textContent = 'Editar Plan';
+            document.getElementById('plan-form-subtitle').textContent = 'Modifica los datos del plan mensual';
+            document.getElementById('planSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Guardar cambios';
+            updatePlanPreview();
+            switchPlansPanel('form');
+            document.getElementById('plan_nombre').focus();
         }
         function resetPlan(){
-            document.getElementById('plan_id').value='';
-            document.getElementById('plan_nombre').value='';
-            document.getElementById('plan_precio').value='';
-            document.getElementById('plan_max_barberos').value='3';
-            document.getElementById('plan_max_citas').value='100';
-            document.getElementById('plan_descripcion').value='';
-            document.getElementById('plan_action').value='add_plan';
-            document.querySelector('#plan-form-title h3').textContent='Crear Plan';
+            document.getElementById('plan_id').value = '';
+            document.getElementById('plan_nombre').value = '';
+            document.getElementById('plan_precio').value = '';
+            document.getElementById('plan_max_barberos').value = '3';
+            document.getElementById('plan_max_citas').value = '100';
+            document.getElementById('plan_descripcion').value = '';
+            document.getElementById('plan_action').value = 'add_plan';
+            document.querySelector('#plan-form-title h3').textContent = 'Crear Plan';
+            document.getElementById('plan-form-subtitle').textContent = 'Define nombre, precio mensual y límites';
+            document.getElementById('planSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Guardar plan';
+            const tabForm = document.getElementById('planTabForm');
+            if (tabForm) tabForm.innerHTML = '<i class="fas fa-plus-circle"></i> Crear plan';
+            updatePlanPreview();
         }
+        updatePlanPreview();
         </script>
 
         <!-- ══════════════ PAGOS ══════════════ -->
@@ -912,7 +1540,8 @@ $plan_colors = [
                         LEFT JOIN planes pl ON pl.id = sub.plan_id
                         LEFT JOIN pagos_suscripcion p ON p.sucursal_id = s.id
                         WHERE s.id > 1
-                        GROUP BY s.id
+                        GROUP BY s.id, s.nombre, s.direccion, s.activo, s.creado_en,
+                            sub.plan_id, sub.fecha_vencimiento, sub.estado, pl.nombre, pl.precio_mensual
                         ORDER BY s.nombre");
                     if ($exp && $exp->num_rows > 0):
                         $pi2=0;
@@ -986,7 +1615,7 @@ $plan_colors = [
                             <select name="pago_plan" class="form-select">
                                 <option value="">— Sin plan específico —</option>
                                 <?php foreach($planes_arr as $p): ?>
-                                <option value="<?php echo $p['id']; ?>"><?php echo htmlspecialchars($p['nombre']); ?> — $<?php echo number_format($p['precio_mensual'],2); ?></option>
+                                <option value="<?php echo $p['id']; ?>"><?php echo htmlspecialchars($p['nombre']); ?> — $<?php echo number_format($p['precio_mensual'],2); ?>/mes</option>
                                 <?php endforeach; ?>
                             </select>
                         </div>

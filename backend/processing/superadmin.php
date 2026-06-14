@@ -9,30 +9,188 @@ if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
 
 $action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 
+function suscripcion_fin_mensual(string $inicio): string {
+    $dt = new DateTime($inicio);
+    $dt->modify('+1 month');
+    return $dt->format('Y-m-d');
+}
+
+function upsert_sucursal_suscripcion(mysqli $conn, int $sucursal_id, int $plan_id, string $inicio): void {
+    if ($plan_id <= 0 || !$inicio) {
+        return;
+    }
+    $fin = suscripcion_fin_mensual($inicio);
+    $estado = (strtotime($fin) < strtotime('today')) ? 'vencido' : 'activo';
+    $d = $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?");
+    $d->bind_param("i", $sucursal_id);
+    $d->execute();
+    $d->close();
+    $stmt = $conn->prepare("INSERT INTO suscripciones (sucursal_id, plan_id, fecha_inicio, fecha_vencimiento, estado) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("iisss", $sucursal_id, $plan_id, $inicio, $fin, $estado);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function clear_sucursal_suscripcion(mysqli $conn, int $sucursal_id): void {
+    $d = $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?");
+    $d->bind_param("i", $sucursal_id);
+    $d->execute();
+    $d->close();
+}
+
+function crear_admin_tienda(mysqli $conn, int $sucursal_id, string $nombre, string $usuario, string $password, string $telefono): bool {
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    $stmt = $conn->prepare("INSERT INTO usuarios (usuario, password, nombre, telefono, rol, sucursal_id) VALUES (?, ?, ?, ?, 'admin', ?)");
+    $stmt->bind_param("ssssi", $usuario, $hash, $nombre, $telefono, $sucursal_id);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
+function actualizar_admin_tienda(mysqli $conn, int $adm_id, int $sucursal_id, string $nombre, string $usuario, string $telefono, string $password = ''): bool {
+    if ($password !== '') {
+        if (strlen($password) < 8) {
+            return false;
+        }
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("UPDATE usuarios SET nombre=?, usuario=?, telefono=?, sucursal_id=?, password=? WHERE id=? AND rol='admin'");
+        $stmt->bind_param("sssisi", $nombre, $usuario, $telefono, $sucursal_id, $hash, $adm_id);
+    } else {
+        $stmt = $conn->prepare("UPDATE usuarios SET nombre=?, usuario=?, telefono=?, sucursal_id=? WHERE id=? AND rol='admin'");
+        $stmt->bind_param("sssii", $nombre, $usuario, $telefono, $sucursal_id, $adm_id);
+    }
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
 // --- SUCURSALES ---
 if ($action == 'add_sucursal') {
     if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
     csrf_regenerate();
-    $nombre = trim($_POST['shop_name']);
-    $direccion = trim($_POST['shop_address']);
-    $stmt = $conn->prepare("INSERT INTO sucursales (nombre, direccion) VALUES (?, ?)");
-    $stmt->bind_param("ss", $nombre, $direccion);
-    $stmt->execute();
-    $stmt->close();
-    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Tienda+registrada+con+éxito");
+    $nombre    = trim($_POST['shop_name'] ?? '');
+    $direccion = trim($_POST['shop_address'] ?? '');
+    $plan_id   = intval($_POST['shop_plan'] ?? 0);
+    $inicio    = trim($_POST['shop_sub_inicio'] ?? '');
+    $sin_plan  = isset($_POST['shop_sin_plan']) && $_POST['shop_sin_plan'] === '1';
+    $with_plan = array_key_exists('shop_sub_inicio', $_POST) || array_key_exists('shop_sin_plan', $_POST);
+    $adm_nombre   = trim($_POST['shop_adm_nombre'] ?? '');
+    $adm_usuario  = trim($_POST['shop_adm_usuario'] ?? '');
+    $adm_password = trim($_POST['shop_adm_password'] ?? '');
+    $adm_telefono = trim($_POST['shop_adm_telefono'] ?? '');
+
+    if (!$nombre || !$direccion) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Completa+nombre+y+dirección+de+la+tienda");
+        exit;
+    }
+    if ($with_plan && !$sin_plan && $plan_id <= 0) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Selecciona+un+plan+o+marca+“Sin+plan+por+ahora”");
+        exit;
+    }
+    if ($with_plan && !$sin_plan && !$inicio) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Indica+el+inicio+del+periodo+mensual");
+        exit;
+    }
+    if (!$adm_nombre || !$adm_usuario || strlen($adm_password) < 8) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Completa+los+datos+del+administrador+%28contraseña+mín.+8+caracteres%29");
+        exit;
+    }
+
+    $conn->begin_transaction();
+    try {
+        $stmt = $conn->prepare("INSERT INTO sucursales (nombre, direccion) VALUES (?, ?)");
+        $stmt->bind_param("ss", $nombre, $direccion);
+        $stmt->execute();
+        $sucursal_id = $stmt->insert_id;
+        $stmt->close();
+
+        if (!$sin_plan && $with_plan) {
+            upsert_sucursal_suscripcion($conn, $sucursal_id, $plan_id, $inicio);
+        }
+
+        if (!crear_admin_tienda($conn, $sucursal_id, $adm_nombre, $adm_usuario, $adm_password, $adm_telefono)) {
+            throw new RuntimeException('usuario_duplicado');
+        }
+
+        $conn->commit();
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Tienda+y+administrador+registrados+con+éxito");
+    } catch (RuntimeException $e) {
+        $conn->rollback();
+        if ($e->getMessage() === 'usuario_duplicado') {
+            header("Location: ../../frontend/superadmin.php?page=barbershops&msg=El+nombre+de+usuario+del+admin+ya+existe");
+        } else {
+            header("Location: ../../frontend/superadmin.php?page=barbershops&msg=No+se+pudo+registrar+la+tienda");
+        }
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log('add_sucursal: ' . $e->getMessage());
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=No+se+pudo+registrar+la+tienda");
+    }
     exit;
 }
 
 if ($action == 'edit_sucursal') {
     if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
     csrf_regenerate();
-    $id = intval($_POST['id']);
-    $nombre = trim($_POST['shop_name']);
-    $direccion = trim($_POST['shop_address']);
+    $id        = intval($_POST['id'] ?? 0);
+    $nombre    = trim($_POST['shop_name'] ?? '');
+    $direccion = trim($_POST['shop_address'] ?? '');
+    $plan_id   = intval($_POST['shop_plan'] ?? 0);
+    $inicio    = trim($_POST['shop_sub_inicio'] ?? '');
+    $sin_plan  = isset($_POST['shop_sin_plan']) && $_POST['shop_sin_plan'] === '1';
+    $with_plan = array_key_exists('shop_sub_inicio', $_POST) || array_key_exists('shop_sin_plan', $_POST);
+    $adm_id       = intval($_POST['shop_adm_id'] ?? 0);
+    $adm_nombre   = trim($_POST['shop_adm_nombre'] ?? '');
+    $adm_usuario  = trim($_POST['shop_adm_usuario'] ?? '');
+    $adm_password = trim($_POST['shop_adm_password'] ?? '');
+    $adm_telefono = trim($_POST['shop_adm_telefono'] ?? '');
+
+    if (!$id || $id === 1 || !$nombre || !$direccion) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Datos+de+tienda+incompletos");
+        exit;
+    }
+    if ($with_plan && !$sin_plan && $plan_id <= 0) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Selecciona+un+plan+o+marca+“Sin+plan+por+ahora”");
+        exit;
+    }
+    if (!$adm_nombre || !$adm_usuario) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Completa+los+datos+del+administrador");
+        exit;
+    }
+    if (!$adm_id && strlen($adm_password) < 8) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Contraseña+del+admin+mínimo+8+caracteres");
+        exit;
+    }
+    if ($adm_password !== '' && strlen($adm_password) < 8) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Contraseña+del+admin+mínimo+8+caracteres");
+        exit;
+    }
+
     $stmt = $conn->prepare("UPDATE sucursales SET nombre = ?, direccion = ? WHERE id = ?");
     $stmt->bind_param("ssi", $nombre, $direccion, $id);
     $stmt->execute();
     $stmt->close();
+
+    if ($with_plan) {
+        if ($sin_plan) {
+            clear_sucursal_suscripcion($conn, $id);
+        } else {
+            upsert_sucursal_suscripcion($conn, $id, $plan_id, $inicio);
+        }
+    }
+
+    if ($adm_id > 0) {
+        if (!actualizar_admin_tienda($conn, $adm_id, $id, $adm_nombre, $adm_usuario, $adm_telefono, $adm_password)) {
+            header("Location: ../../frontend/superadmin.php?page=barbershops&msg=No+se+pudo+actualizar+el+administrador");
+            exit;
+        }
+    } else {
+        if (!crear_admin_tienda($conn, $id, $adm_nombre, $adm_usuario, $adm_password, $adm_telefono)) {
+            header("Location: ../../frontend/superadmin.php?page=barbershops&msg=El+nombre+de+usuario+del+admin+ya+existe");
+            exit;
+        }
+    }
+
     header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Tienda+actualizada");
     exit;
 }
@@ -135,7 +293,7 @@ if ($action == 'assign_plan') {
     $sucursal_id = intval($_POST['sub_sucursal']);
     $plan_id     = intval($_POST['sub_plan']);
     $inicio      = trim($_POST['sub_inicio']);
-    $fin         = trim($_POST['sub_fin']);
+    $fin         = suscripcion_fin_mensual($inicio);
     // Una sucursal tiene una sola suscripción activa: reemplazar la anterior.
     $d = $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?");
     $d->bind_param("i", $sucursal_id);
