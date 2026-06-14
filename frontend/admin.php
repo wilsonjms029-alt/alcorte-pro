@@ -514,8 +514,362 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
         .barbero-grid {
             padding: 20px;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
             gap: 16px;
+        }
+
+        /* ── PERSONAL PAGE ── */
+        .team-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            padding: 6px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            width: fit-content;
+            max-width: 100%;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .team-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 0.75rem;
+            background: transparent;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        .team-tab:hover { color: #0f172a; background: #f8fafc; }
+
+        .team-tab.active {
+            background: #0f172a;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(15,23,42,0.15);
+        }
+
+        .team-tab .tab-count {
+            padding: 2px 8px;
+            border-radius: 2rem;
+            font-size: 10px;
+            font-weight: 900;
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .team-tab.active .tab-count {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        .team-panel { display: none; }
+        .team-panel.active { display: block; }
+
+        .team-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 16px 20px 0;
+        }
+
+        .team-toolbar .search-box { margin-bottom: 0; flex: 1; min-width: 200px; }
+
+        .time-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .shift-presets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .shift-preset {
+            padding: 6px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 2rem;
+            background: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        .shift-preset:hover {
+            border-color: #b49363;
+            color: #92400e;
+            background: #fffbeb;
+        }
+
+        .schedule-preview {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 16px;
+        }
+
+        .schedule-preview-label {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+
+        .schedule-bar {
+            position: relative;
+            height: 28px;
+            background: #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .schedule-bar-work {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, #b49363, #c4a574);
+            border-radius: 4px;
+            min-width: 4px;
+            transition: left 0.2s, width 0.2s;
+        }
+
+        .schedule-bar-lunch {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            background: rgba(255,255,255,0.55);
+            border: 1px dashed rgba(0,0,0,0.15);
+            border-radius: 3px;
+            min-width: 3px;
+            transition: left 0.2s, width 0.2s;
+        }
+
+        .schedule-bar-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 10px;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .schedule-preview-text {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+
+        .password-wrap {
+            position: relative;
+        }
+
+        .password-wrap .form-input { padding-right: 40px; }
+
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px;
+            font-size: 14px;
+        }
+
+        .password-toggle:hover { color: #64748b; }
+
+        .barbero-card {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .barbero-card.is-editing {
+            border-color: #b49363;
+            box-shadow: 0 0 0 3px rgba(180,147,99,0.15);
+            background: #fff;
+        }
+
+        .barbero-card.is-hidden-filter { display: none; }
+
+        .barbero-avatar-wrap {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .barbero-avatar-fallback {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0f172a, #334155);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 16px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .barbero-status-dot {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+        }
+
+        .barbero-status-dot.on { background: #22c55e; }
+        .barbero-status-dot.off { background: #ef4444; }
+
+        .barbero-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .barbero-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .barbero-meta i { width: 14px; color: #b49363; font-size: 11px; }
+
+        .barbero-mini-bar {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .barbero-mini-bar-work {
+            position: absolute;
+            height: 100%;
+            background: #b49363;
+            border-radius: 3px;
+        }
+
+        .barbero-mini-bar-lunch {
+            position: absolute;
+            height: 100%;
+            background: #fde68a;
+            border-radius: 3px;
+        }
+
+        .barbero-sucursal {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .form-panel-card { max-width: 560px; }
+
+        .status-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+
+        .status-toggle-row span {
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .status-toggle-row small {
+            display: block;
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
+        .btn-add-team {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            background: #b49363;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s;
+            font-family: inherit;
+            white-space: nowrap;
+        }
+
+        .btn-add-team:hover { background: #9a7d52; }
+
+        .kpi-grid.team-kpi {
+            margin-bottom: 24px;
+        }
+
+        .kpi-grid.team-kpi .kpi-card { padding: 16px 20px; }
+
+        .kpi-grid.team-kpi .kpi-value { font-size: 24px; }
+
+        .form-hint {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .barbero-card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .barbero-card-footer .badge { font-size: 10px; }
+
+        @media (max-width: 480px) {
+            .time-grid { grid-template-columns: 1fr; }
+            .team-tabs { width: 100%; }
+            .team-tab { flex: 1; justify-content: center; padding: 10px 12px; }
         }
 
         .svc-grid {
@@ -1334,22 +1688,175 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                     });
                     </script>
 
-                <?php elseif ($page == 'personal'): ?>
-                    <div class="page-grid">
+                <?php elseif ($page == 'personal'):
+                    if ($is_scoped) {
+                        $barb_stmt = $conn->prepare("SELECT * FROM barberos WHERE sucursal_id = ? ORDER BY nombre");
+                        $barb_stmt->bind_param("i", $scope_id);
+                        $barb_stmt->execute();
+                        $barberos_list = $barb_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                        $barb_stmt->close();
+                    } else {
+                        $barb_res = $conn->query("SELECT b.*, s.nombre AS sucursal_nombre FROM barberos b LEFT JOIN sucursales s ON b.sucursal_id = s.id ORDER BY b.nombre");
+                        $barberos_list = $barb_res ? $barb_res->fetch_all(MYSQLI_ASSOC) : [];
+                    }
+                    $barb_total   = count($barberos_list);
+                    $barb_activos = count(array_filter($barberos_list, fn($b) => intval($b['activo']) === 1));
+                    $barb_ocultos = $barb_total - $barb_activos;
+                ?>
+                    <div class="kpi-grid team-kpi">
+                        <div class="kpi-card gold">
+                            <div>
+                                <div class="kpi-label">Total barberos</div>
+                                <div class="kpi-value"><?php echo $barb_total; ?></div>
+                            </div>
+                            <div class="kpi-icon" style="background:#fef3c7;color:#b49363"><i class="fas fa-users"></i></div>
+                        </div>
+                        <div class="kpi-card green">
+                            <div>
+                                <div class="kpi-label">Visibles en reservas</div>
+                                <div class="kpi-value"><?php echo $barb_activos; ?></div>
+                            </div>
+                            <div class="kpi-icon" style="background:#dcfce7;color:#16a34a"><i class="fas fa-eye"></i></div>
+                        </div>
+                        <div class="kpi-card amber">
+                            <div>
+                                <div class="kpi-label">Ocultos</div>
+                                <div class="kpi-value"><?php echo $barb_ocultos; ?></div>
+                            </div>
+                            <div class="kpi-icon" style="background:#fef08a;color:#ca8a04"><i class="fas fa-eye-slash"></i></div>
+                        </div>
+                    </div>
+
+                    <div class="team-tabs" role="tablist">
+                        <button type="button" class="team-tab active" data-team-tab="lista" role="tab" aria-selected="true">
+                            <i class="fas fa-users"></i> Equipo
+                            <span class="tab-count"><?php echo $barb_total; ?></span>
+                        </button>
+                        <button type="button" class="team-tab" data-team-tab="formulario" role="tab" aria-selected="false">
+                            <i class="fas fa-user-plus"></i> <span id="team_tab_form_label">Agregar barbero</span>
+                        </button>
+                    </div>
+
+                    <!-- PANEL: LISTA -->
+                    <div class="team-panel active" id="panel-lista" role="tabpanel">
                         <div class="card">
                             <div class="card-header card-header-flex">
+                                <span>Barberos registrados</span>
+                                <button type="button" class="btn-add-team" onclick="openBarberoForm()">
+                                    <i class="fas fa-plus"></i> Nuevo barbero
+                                </button>
+                            </div>
+                            <div class="team-toolbar">
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="barberoSearch" placeholder="Buscar por nombre…">
+                                </div>
+                                <div class="filter-pills" id="barberoFilters">
+                                    <button type="button" class="filter-pill active" data-bfilter="all">Todos <span class="count"><?php echo $barb_total; ?></span></button>
+                                    <button type="button" class="filter-pill" data-bfilter="active">Activos <span class="count"><?php echo $barb_activos; ?></span></button>
+                                    <button type="button" class="filter-pill" data-bfilter="hidden">Ocultos <span class="count"><?php echo $barb_ocultos; ?></span></button>
+                                </div>
+                            </div>
+                            <div class="barbero-grid" id="barberoGrid">
+                                <?php if (empty($barberos_list)): ?>
+                                <div class="empty-state" style="grid-column:1/-1;padding:48px 24px">
+                                    <i class="fas fa-user-tie"></i>
+                                    <strong>Aún no hay barberos</strong>
+                                    <span style="font-size:13px;display:block;margin:8px 0 16px">Registra al primero para que aparezca en las reservas</span>
+                                    <button type="button" class="btn-add-team" onclick="openBarberoForm()">
+                                        <i class="fas fa-plus"></i> Agregar barbero
+                                    </button>
+                                </div>
+                                <?php else: foreach ($barberos_list as $b):
+                                    $ini = strtoupper(substr($b['nombre'], 0, 1));
+                                    $parts = preg_split('/\s+/', trim($b['nombre']));
+                                    if (count($parts) > 1) $ini .= strtoupper(substr($parts[1], 0, 1));
+                                    $h0 = strtotime($b['hora_inicio']);
+                                    $h1 = strtotime($b['hora_fin']);
+                                    $li = strtotime($b['almuerzo_inicio']);
+                                    $lf = strtotime($b['almuerzo_fin']);
+                                    $day_sec = 12 * 3600;
+                                    $base = 8 * 3600;
+                                    $pct = fn($t) => max(0, min(100, (($t - $base) / $day_sec) * 100));
+                                    $w_start = $pct($h0);
+                                    $w_width = max(2, $pct($h1) - $pct($h0));
+                                    $l_start = $pct($li);
+                                    $l_width = max(1, $pct($lf) - $pct($li));
+                                ?>
+                                <div class="barbero-card"
+                                     data-id="<?php echo $b['id']; ?>"
+                                     data-nombre="<?php echo htmlspecialchars(strtolower($b['nombre'])); ?>"
+                                     data-activo="<?php echo intval($b['activo']); ?>"
+                                     onclick="editarBarberoCard(this, event)"
+                                     data-barbero='<?php echo htmlspecialchars(json_encode([
+                                         'id' => $b['id'],
+                                         'nombre' => $b['nombre'],
+                                         'hora_inicio' => $b['hora_inicio'],
+                                         'hora_fin' => $b['hora_fin'],
+                                         'almuerzo_inicio' => $b['almuerzo_inicio'],
+                                         'almuerzo_fin' => $b['almuerzo_fin'],
+                                         'activo' => intval($b['activo']),
+                                     ]), ENT_QUOTES); ?>'>
+                                    <?php if (!$is_scoped && !empty($b['sucursal_nombre'])): ?>
+                                    <div class="barbero-sucursal"><?php echo htmlspecialchars($b['sucursal_nombre']); ?></div>
+                                    <?php endif; ?>
+                                    <div class="barbero-card-header">
+                                        <div class="barbero-avatar-wrap">
+                                            <?php if (!empty($b['foto_url']) && $b['foto_url'] !== 'https://via.placeholder.com/150'): ?>
+                                            <img src="<?php echo htmlspecialchars($b['foto_url']); ?>" alt="" class="barbero-avatar" style="width:52px;height:52px">
+                                            <?php else: ?>
+                                            <div class="barbero-avatar-fallback"><?php echo $ini; ?></div>
+                                            <?php endif; ?>
+                                            <span class="barbero-status-dot <?php echo $b['activo'] ? 'on' : 'off'; ?>"></span>
+                                        </div>
+                                        <div>
+                                            <div class="barbero-name"><?php echo htmlspecialchars($b['nombre']); ?></div>
+                                            <div class="barbero-schedule">
+                                                <i class="fas fa-clock"></i>
+                                                <?php echo date('h:i A', $h0); ?> – <?php echo date('h:i A', $h1); ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="barbero-mini-bar" title="Jornada laboral">
+                                        <span class="barbero-mini-bar-work" style="left:<?php echo $w_start; ?>%;width:<?php echo $w_width; ?>%"></span>
+                                        <span class="barbero-mini-bar-lunch" style="left:<?php echo $l_start; ?>%;width:<?php echo $l_width; ?>%"></span>
+                                    </div>
+                                    <div class="barbero-meta">
+                                        <span><i class="fas fa-utensils"></i> Almuerzo <?php echo date('h:i A', $li); ?> – <?php echo date('h:i A', $lf); ?></span>
+                                    </div>
+                                    <div class="barbero-card-footer">
+                                        <span class="badge" style="<?php echo $b['activo'] ? 'background:#dcfce7;color:#166534' : 'background:#fee2e2;color:#991b1b'; ?>">
+                                            <?php echo $b['activo'] ? 'Visible' : 'Oculto'; ?>
+                                        </span>
+                                        <form action="../backend/processing/admin.php" method="POST" onclick="event.stopPropagation()" onsubmit="return confirm('¿Eliminar a <?php echo htmlspecialchars(addslashes($b['nombre'])); ?>?');">
+                                            <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                            <input type="hidden" name="action" value="delete_barbero">
+                                            <input type="hidden" name="id" value="<?php echo $b['id']; ?>">
+                                            <button type="submit" class="btn-danger" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <?php endforeach; endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PANEL: FORMULARIO -->
+                    <div class="team-panel" id="panel-formulario" role="tabpanel">
+                        <div class="card form-panel-card">
+                            <div class="card-header card-header-flex">
                                 <span id="barb_form_title">Registrar Barbero</span>
-                                <button type="button" class="btn-secondary" id="barb_cancel_btn" style="display:none" onclick="resetBarberoForm()">Cancelar</button>
+                                <button type="button" class="btn-secondary" id="barb_cancel_btn" onclick="cancelBarberoForm()">Volver al listado</button>
                             </div>
                             <div class="form-card-body">
-                                <form action="../backend/processing/admin.php" method="POST">
+                                <form action="../backend/processing/admin.php" method="POST" id="barberoForm">
                                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                     <input type="hidden" id="barb_action" name="action" value="add_barbero">
                                     <input type="hidden" id="barb_id" name="id" value="">
 
                                     <div class="form-group">
-                                        <label class="form-label">Nombre</label>
-                                        <input type="text" id="barb_nombre" name="nombre" class="form-input" placeholder="Ej. Joshy" required>
+                                        <label class="form-label">Nombre completo</label>
+                                        <input type="text" id="barb_nombre" name="nombre" class="form-input" placeholder="Ej. Joshy Mendoza" required>
                                     </div>
 
                                     <?php if (!$is_scoped): ?>
@@ -1365,109 +1872,161 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                     </div>
                                     <?php endif; ?>
 
-                                    <div class="form-group">
-                                        <label class="form-label">Hora Entrada</label>
-                                        <input type="time" id="barb_inicio" name="hora_inicio" value="09:00" class="form-input" required>
+                                    <div class="form-section-title" style="border-top:none;padding-top:0;margin-top:0"><i class="fas fa-clock"></i> Horario de trabajo</div>
+
+                                    <div class="shift-presets">
+                                        <button type="button" class="shift-preset" data-preset="standard">Estándar 9–17</button>
+                                        <button type="button" class="shift-preset" data-preset="morning">Mañana 8–14</button>
+                                        <button type="button" class="shift-preset" data-preset="afternoon">Tarde 14–20</button>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label class="form-label">Hora Salida</label>
-                                        <input type="time" id="barb_fin" name="hora_fin" value="17:00" class="form-input" required>
+                                    <div class="schedule-preview">
+                                        <div class="schedule-preview-label">Vista previa del horario</div>
+                                        <div class="schedule-bar" id="scheduleBar">
+                                            <div class="schedule-bar-work" id="scheduleWork"></div>
+                                            <div class="schedule-bar-lunch" id="scheduleLunch"></div>
+                                        </div>
+                                        <div class="schedule-bar-labels">
+                                            <span>8:00 AM</span><span>12:00 PM</span><span>8:00 PM</span>
+                                        </div>
+                                        <div class="schedule-preview-text" id="scheduleText">Jornada de 9:00 AM a 5:00 PM · Almuerzo 12:00–1:00 PM</div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label class="form-label">Almuerzo Inicio</label>
-                                        <input type="time" id="barb_almuerzo_inicio" name="almuerzo_inicio" value="12:00" class="form-input" required>
+                                    <div class="time-grid">
+                                        <div class="form-group">
+                                            <label class="form-label">Entrada</label>
+                                            <input type="time" id="barb_inicio" name="hora_inicio" value="09:00" class="form-input schedule-input" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Salida</label>
+                                            <input type="time" id="barb_fin" name="hora_fin" value="17:00" class="form-input schedule-input" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Almuerzo inicio</label>
+                                            <input type="time" id="barb_almuerzo_inicio" name="almuerzo_inicio" value="12:00" class="form-input schedule-input" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Almuerzo fin</label>
+                                            <input type="time" id="barb_almuerzo_fin" name="almuerzo_fin" value="13:00" class="form-input schedule-input" required>
+                                        </div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label class="form-label">Almuerzo Fin</label>
-                                        <input type="time" id="barb_almuerzo_fin" name="almuerzo_fin" value="13:00" class="form-input" required>
+                                    <div id="status_container" style="display:none">
+                                        <div class="status-toggle-row">
+                                            <div>
+                                                <span>Visible en reservas</span>
+                                                <small>Los clientes podrán elegir a este barbero</small>
+                                            </div>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="barb_activo" name="activo" value="1">
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
                                     </div>
 
                                     <div id="barb_credentials_section">
-                                        <div class="form-section-title"><i class="fas fa-lock"></i> Acceso al Sistema</div>
+                                        <div class="form-section-title"><i class="fas fa-lock"></i> Acceso al sistema</div>
                                         <div class="form-group">
                                             <label class="form-label">Usuario</label>
                                             <input type="text" id="barb_usuario" name="barb_usuario" class="form-input" placeholder="Ej. joshy" autocomplete="off" required>
+                                            <p class="form-hint">El barbero usará este usuario para entrar al panel</p>
                                         </div>
                                         <div class="form-group">
                                             <label class="form-label">Contraseña</label>
-                                            <input type="password" id="barb_password" name="barb_password" class="form-input" placeholder="Mín. 8 caracteres" autocomplete="new-password" required minlength="8">
-                                        </div>
-                                    </div>
-
-                                    <div class="form-group" id="status_container" style="display: none;">
-                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b7280; cursor: pointer;">
-                                            <input type="checkbox" id="barb_activo" name="activo" value="1" style="width: 16px; height: 16px;">
-                                            Activo en Sistema
-                                        </label>
-                                    </div>
-
-                                    <button type="submit" class="btn-gold">
-                                        <i class="fas fa-save"></i> Guardar
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header card-header-flex">
-                                <span>Barberos en Sistema</span>
-                                <small>Horarios y visibilidad</small>
-                            </div>
-                            <div class="barbero-grid">
-                                <?php
-                                if ($is_scoped) {
-                                    $barb_stmt = $conn->prepare("SELECT * FROM barberos WHERE sucursal_id = ? ORDER BY nombre");
-                                    $barb_stmt->bind_param("i", $scope_id);
-                                    $barb_stmt->execute();
-                                    $barb_res = $barb_stmt->get_result();
-                                } else {
-                                    $barb_res = $conn->query("SELECT * FROM barberos ORDER BY nombre");
-                                }
-                                $has_barberos = false;
-                                while ($b = $barb_res->fetch_assoc()):
-                                    $has_barberos = true;
-                                ?>
-                                <div class="barbero-card">
-                                    <div class="barbero-card-header">
-                                        <img src="<?php echo $b['foto_url']; ?>" alt="" class="barbero-avatar">
-                                        <div>
-                                            <div class="barbero-name"><?php echo htmlspecialchars($b['nombre']); ?></div>
-                                            <div class="barbero-schedule">
-                                                <i class="fas fa-clock"></i>
-                                                <?php echo date('h:i A', strtotime($b['hora_inicio'])); ?> – <?php echo date('h:i A', strtotime($b['hora_fin'])); ?>
+                                            <div class="password-wrap">
+                                                <input type="password" id="barb_password" name="barb_password" class="form-input" placeholder="Mín. 8 caracteres" autocomplete="new-password" required minlength="8">
+                                                <button type="button" class="password-toggle" id="togglePassword" aria-label="Mostrar contraseña"><i class="fas fa-eye"></i></button>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="barbero-actions">
-                                        <button type="button" class="btn-secondary" onclick="editarBarbero(<?php echo $b['id']; ?>, '<?php echo htmlspecialchars($b['nombre'], ENT_QUOTES); ?>', '<?php echo $b['hora_inicio']; ?>', '<?php echo $b['hora_fin']; ?>', '<?php echo $b['almuerzo_inicio']; ?>', '<?php echo $b['almuerzo_fin']; ?>', <?php echo $b['activo']; ?>)"><i class="fas fa-pen"></i> Editar</button>
-                                        <form action="../backend/processing/admin.php" method="POST" onsubmit="return confirm('¿Eliminar este barbero?');">
-                                            <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                                            <input type="hidden" name="action" value="delete_barbero">
-                                            <input type="hidden" name="id" value="<?php echo $b['id']; ?>">
-                                            <button type="submit" class="btn-danger"><i class="fas fa-trash"></i></button>
-                                        </form>
-                                    </div>
-                                    <span class="badge" style="<?php echo $b['activo'] == 1 ? 'background:#dcfce7;color:#166534' : 'background:#fee2e2;color:#991b1b'; ?>">
-                                        <?php echo $b['activo'] == 1 ? 'Visible en reservas' : 'Oculto'; ?>
-                                    </span>
-                                </div>
-                                <?php endwhile;
-                                if (!$has_barberos): ?>
-                                <div class="empty-state" style="grid-column:1/-1;padding:32px">
-                                    <i class="fas fa-user-tie"></i>
-                                    <strong>Sin barberos registrados</strong>
-                                    <span style="font-size:13px">Agrega el primero con el formulario</span>
-                                </div>
-                                <?php endif; ?>
+
+                                    <button type="submit" class="btn-gold" id="barb_submit_btn">
+                                        <i class="fas fa-save"></i> Guardar barbero
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
 
                     <script>
-                        function editarBarbero(id, nombre, inicio, fin, almuerzo_in, almuerzo_fi, activo) {
+                    (function() {
+                        const PRESETS = {
+                            standard:  { inicio:'09:00', fin:'17:00', ali:'12:00', alf:'13:00' },
+                            morning:   { inicio:'08:00', fin:'14:00', ali:'11:00', alf:'11:30' },
+                            afternoon: { inicio:'14:00', fin:'20:00', ali:'17:00', alf:'17:30' },
+                        };
+                        const DAY_START = 8 * 60;
+                        const DAY_SPAN  = 12 * 60;
+
+                        function switchTeamTab(tab) {
+                            document.querySelectorAll('.team-tab').forEach(t => {
+                                const on = t.dataset.teamTab === tab;
+                                t.classList.toggle('active', on);
+                                t.setAttribute('aria-selected', on ? 'true' : 'false');
+                            });
+                            document.querySelectorAll('.team-panel').forEach(p => p.classList.remove('active'));
+                            document.getElementById('panel-' + tab)?.classList.add('active');
+                        }
+
+                        function fmt12(t) {
+                            if (!t) return '';
+                            const [h, m] = t.split(':').map(Number);
+                            const am = h < 12;
+                            const h12 = h % 12 || 12;
+                            return h12 + ':' + String(m).padStart(2,'0') + ' ' + (am ? 'AM' : 'PM');
+                        }
+
+                        function toMin(t) {
+                            const [h, m] = t.split(':').map(Number);
+                            return h * 60 + m;
+                        }
+
+                        function pct(minutes) {
+                            return Math.max(0, Math.min(100, ((minutes - DAY_START) / DAY_SPAN) * 100));
+                        }
+
+                        function updateSchedulePreview() {
+                            const ini = document.getElementById('barb_inicio').value;
+                            const fin = document.getElementById('barb_fin').value;
+                            const ali = document.getElementById('barb_almuerzo_inicio').value;
+                            const alf = document.getElementById('barb_almuerzo_fin').value;
+                            if (!ini || !fin) return;
+
+                            const wStart = pct(toMin(ini));
+                            const wEnd   = pct(toMin(fin));
+                            const lStart = pct(toMin(ali));
+                            const lEnd   = pct(toMin(alf));
+
+                            document.getElementById('scheduleWork').style.cssText = `left:${wStart}%;width:${Math.max(2, wEnd - wStart)}%`;
+                            document.getElementById('scheduleLunch').style.cssText = `left:${lStart}%;width:${Math.max(1, lEnd - lStart)}%`;
+                            document.getElementById('scheduleText').textContent =
+                                'Jornada de ' + fmt12(ini) + ' a ' + fmt12(fin) + ' · Almuerzo ' + fmt12(ali) + '–' + fmt12(alf);
+                        }
+
+                        function highlightCard(id) {
+                            document.querySelectorAll('.barbero-card').forEach(c => {
+                                c.classList.toggle('is-editing', id && c.dataset.id == id);
+                            });
+                        }
+
+                        window.openBarberoForm = function() {
+                            resetBarberoForm();
+                            switchTeamTab('formulario');
+                            document.getElementById('barb_nombre').focus();
+                        };
+
+                        window.cancelBarberoForm = function() {
+                            resetBarberoForm();
+                            switchTeamTab('lista');
+                        };
+
+                        window.editarBarberoCard = function(card, ev) {
+                            if (ev && ev.target.closest('form, button')) return;
+                            const d = JSON.parse(card.dataset.barbero);
+                            editarBarbero(d.id, d.nombre, d.hora_inicio, d.hora_fin, d.almuerzo_inicio, d.almuerzo_fin, d.activo);
+                        };
+
+                        window.editarBarbero = function(id, nombre, inicio, fin, almuerzo_in, almuerzo_fi, activo) {
                             document.getElementById('barb_id').value = id;
                             document.getElementById('barb_nombre').value = nombre;
                             document.getElementById('barb_inicio').value = inicio.substring(0, 5);
@@ -1480,27 +2039,93 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                             document.getElementById('barb_usuario').removeAttribute('required');
                             document.getElementById('barb_password').removeAttribute('required');
                             document.getElementById('barb_action').value = 'edit_barbero';
-                            document.getElementById('barb_form_title').textContent = 'Editar Barbero';
-                            document.getElementById('barb_cancel_btn').style.display = 'inline-block';
-                            document.getElementById('barb_nombre').scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                        function resetBarberoForm() {
+                            document.getElementById('barb_form_title').textContent = 'Editar: ' + nombre;
+                            document.getElementById('team_tab_form_label').textContent = 'Editar barbero';
+                            document.getElementById('barb_submit_btn').innerHTML = '<i class="fas fa-save"></i> Guardar cambios';
+                            highlightCard(id);
+                            updateSchedulePreview();
+                            switchTeamTab('formulario');
+                            document.getElementById('barb_nombre').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        };
+
+                        window.resetBarberoForm = function() {
+                            document.getElementById('barberoForm').reset();
                             document.getElementById('barb_id').value = '';
-                            document.getElementById('barb_nombre').value = '';
                             document.getElementById('barb_inicio').value = '09:00';
                             document.getElementById('barb_fin').value = '17:00';
                             document.getElementById('barb_almuerzo_inicio').value = '12:00';
                             document.getElementById('barb_almuerzo_fin').value = '13:00';
-                            document.getElementById('barb_usuario').value = '';
-                            document.getElementById('barb_password').value = '';
                             document.getElementById('status_container').style.display = 'none';
                             document.getElementById('barb_credentials_section').style.display = 'block';
                             document.getElementById('barb_usuario').setAttribute('required', '');
                             document.getElementById('barb_password').setAttribute('required', '');
                             document.getElementById('barb_action').value = 'add_barbero';
                             document.getElementById('barb_form_title').textContent = 'Registrar Barbero';
-                            document.getElementById('barb_cancel_btn').style.display = 'none';
+                            document.getElementById('team_tab_form_label').textContent = 'Agregar barbero';
+                            document.getElementById('barb_submit_btn').innerHTML = '<i class="fas fa-save"></i> Guardar barbero';
+                            highlightCard(null);
+                            updateSchedulePreview();
+                        };
+
+                        document.querySelectorAll('.team-tab').forEach(tab => {
+                            tab.addEventListener('click', () => {
+                                if (tab.dataset.teamTab === 'formulario' && !document.getElementById('barb_id').value) {
+                                    resetBarberoForm();
+                                }
+                                switchTeamTab(tab.dataset.teamTab);
+                            });
+                        });
+
+                        document.querySelectorAll('.shift-preset').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                const p = PRESETS[btn.dataset.preset];
+                                if (!p) return;
+                                document.getElementById('barb_inicio').value = p.inicio;
+                                document.getElementById('barb_fin').value = p.fin;
+                                document.getElementById('barb_almuerzo_inicio').value = p.ali;
+                                document.getElementById('barb_almuerzo_fin').value = p.alf;
+                                updateSchedulePreview();
+                            });
+                        });
+
+                        document.querySelectorAll('.schedule-input').forEach(el => {
+                            el.addEventListener('change', updateSchedulePreview);
+                            el.addEventListener('input', updateSchedulePreview);
+                        });
+
+                        document.getElementById('togglePassword')?.addEventListener('click', function() {
+                            const inp = document.getElementById('barb_password');
+                            const icon = this.querySelector('i');
+                            const show = inp.type === 'password';
+                            inp.type = show ? 'text' : 'password';
+                            icon.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+                        });
+
+                        document.getElementById('barberoSearch')?.addEventListener('input', function() {
+                            filterBarberos();
+                        });
+
+                        document.querySelectorAll('#barberoFilters .filter-pill').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                document.querySelectorAll('#barberoFilters .filter-pill').forEach(b => b.classList.remove('active'));
+                                btn.classList.add('active');
+                                filterBarberos();
+                            });
+                        });
+
+                        function filterBarberos() {
+                            const q = (document.getElementById('barberoSearch')?.value || '').toLowerCase().trim();
+                            const f = document.querySelector('#barberoFilters .filter-pill.active')?.dataset.bfilter || 'all';
+                            document.querySelectorAll('.barbero-card[data-id]').forEach(card => {
+                                const matchQ = !q || card.dataset.nombre.includes(q);
+                                const act = card.dataset.activo;
+                                const matchF = f === 'all' || (f === 'active' && act === '1') || (f === 'hidden' && act === '0');
+                                card.classList.toggle('is-hidden-filter', !(matchQ && matchF));
+                            });
                         }
+
+                        updateSchedulePreview();
+                    })();
                     </script>
 
                 <?php elseif ($page == 'servicios'):
