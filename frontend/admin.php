@@ -7,7 +7,8 @@ if (!isset($_SESSION['rol']) || !in_array($_SESSION['rol'], $allowed_roles)) {
     exit;
 }
 
-$is_scoped = ($_SESSION['rol'] === 'gerente');
+$is_scoped = ($_SESSION['rol'] === 'gerente') ||
+             ($_SESSION['rol'] === 'admin' && intval($_SESSION['sucursal_id'] ?? 0) > 0);
 $scope_id  = $is_scoped ? intval($_SESSION['sucursal_id'] ?? 0) ?: null : null;
 
 $page = isset($_GET['page']) ? $_GET['page'] : 'citas';
@@ -569,15 +570,19 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                 </a>
                 <a href="?page=clientes" class="nav-item <?php echo $page == 'clientes' ? 'active' : ''; ?>">
                     <i class="fas fa-users"></i>
-                    <span>Clientes Club</span>
+                    <span>Clientes</span>
                 </a>
                 <a href="?page=personal" class="nav-item <?php echo $page == 'personal' ? 'active' : ''; ?>">
-                    <i class="fas fa-id-card"></i>
-                    <span>Horarios Barberos</span>
+                    <i class="fas fa-user-tie"></i>
+                    <span>Equipo</span>
+                </a>
+                <a href="?page=servicios" class="nav-item <?php echo $page == 'servicios' ? 'active' : ''; ?>">
+                    <i class="fas fa-scissors"></i>
+                    <span>Servicios</span>
                 </a>
                 <a href="?page=ajustes" class="nav-item <?php echo $page == 'ajustes' ? 'active' : ''; ?>">
                     <i class="fas fa-sliders-h"></i>
-                    <span>Métodos y Ajustes</span>
+                    <span>Configuración</span>
                 </a>
             </nav>
 
@@ -886,6 +891,145 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                             document.getElementById('barb_password').setAttribute('required', '');
                             document.getElementById('barb_action').value = 'add_barbero';
                         }
+                    </script>
+
+                <?php elseif ($page == 'servicios'):
+                    $svc_suc = $is_scoped ? $scope_id : 1;
+                    $svc_res = $conn->prepare("SELECT * FROM servicios WHERE sucursal_id = ? ORDER BY orden ASC, id ASC");
+                    $svc_res->bind_param("i", $svc_suc);
+                    $svc_res->execute();
+                    $svc_list = $svc_res->get_result()->fetch_all(MYSQLI_ASSOC);
+                ?>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+
+                        <!-- FORMULARIO -->
+                        <div class="card">
+                            <div class="card-header" id="svc_form_title">Agregar Servicio</div>
+                            <div style="padding: 20px;">
+                                <form action="../backend/processing/admin.php" method="POST" id="svcForm">
+                                    <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                    <input type="hidden" id="svc_action" name="action" value="add_servicio">
+                                    <input type="hidden" id="svc_id"     name="svc_id" value="">
+
+                                    <div class="form-group">
+                                        <label class="form-label">Nombre</label>
+                                        <input type="text" id="svc_nombre" name="svc_nombre" class="form-input" placeholder="Ej. Corte Clásico" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Precio</label>
+                                        <input type="text" id="svc_precio" name="svc_precio" class="form-input" placeholder="Ej. Bs 8">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Duración</label>
+                                        <input type="text" id="svc_duracion" name="svc_duracion" class="form-input" placeholder="Ej. 30 min" value="30 min">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Ícono (Font Awesome)</label>
+                                        <input type="text" id="svc_icono" name="svc_icono" class="form-input" placeholder="fas fa-cut" value="fas fa-cut">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Orden</label>
+                                        <input type="number" id="svc_orden" name="svc_orden" class="form-input" value="0" min="0">
+                                    </div>
+                                    <div class="form-group" id="svc_activo_wrap" style="display:none;">
+                                        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6b7280;cursor:pointer;">
+                                            <input type="checkbox" id="svc_activo" name="svc_activo" value="1" style="width:16px;height:16px;"> Activo
+                                        </label>
+                                    </div>
+
+                                    <button type="submit" class="btn btn-primary" style="width:100%;background:#b49363;color:white;padding:10px;margin-top:8px;">
+                                        <i class="fas fa-save" style="margin-right:6px;"></i> Guardar
+                                    </button>
+                                    <button type="button" onclick="resetSvcForm()" id="svc_cancel_btn"
+                                            style="display:none;width:100%;margin-top:8px;padding:10px;border:1.5px solid #e5e7eb;border-radius:6px;background:#f9fafb;color:#6b7280;cursor:pointer;">
+                                        Cancelar
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- LISTA DE SERVICIOS -->
+                        <div class="card">
+                            <div class="card-header">Servicios registrados</div>
+                            <div style="padding: 20px;">
+                                <?php if (empty($svc_list)): ?>
+                                    <p style="color:#9ca3af;font-size:13px;">No hay servicios registrados aún.</p>
+                                <?php else: ?>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Ícono</th>
+                                            <th>Nombre</th>
+                                            <th>Precio</th>
+                                            <th>Duración</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($svc_list as $sv): ?>
+                                    <tr>
+                                        <td style="text-align:center;font-size:18px;color:#b49363;">
+                                            <i class="<?php echo htmlspecialchars($sv['icono']); ?>"></i>
+                                        </td>
+                                        <td><strong><?php echo htmlspecialchars($sv['nombre']); ?></strong></td>
+                                        <td><?php echo htmlspecialchars($sv['precio']); ?></td>
+                                        <td><?php echo htmlspecialchars($sv['duracion']); ?></td>
+                                        <td>
+                                            <span class="badge" style="<?php echo $sv['activo'] ? 'background:#dcfce7;color:#166534' : 'background:#fee2e2;color:#991b1b'; ?>">
+                                                <?php echo $sv['activo'] ? 'Activo' : 'Inactivo'; ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button type="button"
+                                                onclick="editSvc(<?php echo $sv['id']; ?>,'<?php echo htmlspecialchars($sv['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($sv['precio'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($sv['duracion'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($sv['icono'],ENT_QUOTES); ?>',<?php echo $sv['activo']; ?>,<?php echo $sv['orden']; ?>)"
+                                                style="padding:5px 10px;background:#e5e7eb;border:none;border-radius:4px;font-size:12px;cursor:pointer;color:#6b7280;margin-right:4px;">
+                                                Editar
+                                            </button>
+                                            <form action="../backend/processing/admin.php" method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar este servicio?');">
+                                                <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                                <input type="hidden" name="action"  value="delete_servicio">
+                                                <input type="hidden" name="svc_id"  value="<?php echo $sv['id']; ?>">
+                                                <button type="submit" style="padding:5px 10px;background:#fee2e2;border:none;border-radius:4px;font-size:12px;cursor:pointer;color:#991b1b;">
+                                                    Eliminar
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                    function editSvc(id, nombre, precio, duracion, icono, activo, orden) {
+                        document.getElementById('svc_id').value      = id;
+                        document.getElementById('svc_nombre').value  = nombre;
+                        document.getElementById('svc_precio').value  = precio;
+                        document.getElementById('svc_duracion').value = duracion;
+                        document.getElementById('svc_icono').value   = icono;
+                        document.getElementById('svc_orden').value   = orden;
+                        document.getElementById('svc_activo').checked = (activo == 1);
+                        document.getElementById('svc_activo_wrap').style.display = 'block';
+                        document.getElementById('svc_action').value = 'edit_servicio';
+                        document.getElementById('svc_form_title').textContent = 'Editar Servicio';
+                        document.getElementById('svc_cancel_btn').style.display = 'block';
+                        document.getElementById('svc_nombre').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    function resetSvcForm() {
+                        document.getElementById('svcForm').reset();
+                        document.getElementById('svc_id').value     = '';
+                        document.getElementById('svc_action').value = 'add_servicio';
+                        document.getElementById('svc_form_title').textContent = 'Agregar Servicio';
+                        document.getElementById('svc_activo_wrap').style.display = 'none';
+                        document.getElementById('svc_cancel_btn').style.display  = 'none';
+                        document.getElementById('svc_duracion').value = '30 min';
+                        document.getElementById('svc_icono').value   = 'fas fa-cut';
+                        document.getElementById('svc_orden').value   = '0';
+                    }
                     </script>
 
                 <?php elseif ($page == 'ajustes'): ?>

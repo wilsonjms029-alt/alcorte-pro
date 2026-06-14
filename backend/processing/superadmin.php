@@ -164,3 +164,75 @@ if ($action == 'save_settings') {
     header("Location: ../../frontend/superadmin.php?page=settings&msg=Configuración+actualizada");
     exit;
 }
+
+// --- ADMINISTRADORES ---
+if ($action == 'add_admin') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $nombre    = trim($_POST['adm_nombre']   ?? '');
+    $usuario   = trim($_POST['adm_usuario']  ?? '');
+    $password  = trim($_POST['adm_password'] ?? '');
+    $telefono  = trim($_POST['adm_telefono'] ?? '');
+    $sucursal  = intval($_POST['adm_sucursal'] ?? 0);
+
+    if (!$nombre || !$usuario || strlen($password) < 8 || !$sucursal) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Completa+todos+los+campos+%28contraseña+mín.+8+caracteres%29");
+        exit;
+    }
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    $stmt = $conn->prepare("INSERT INTO usuarios (usuario, password, nombre, telefono, rol, sucursal_id) VALUES (?, ?, ?, ?, 'admin', ?)");
+    $stmt->bind_param("ssssi", $usuario, $hash, $nombre, $telefono, $sucursal);
+    if ($stmt->execute()) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Administrador+creado+con+éxito");
+    } else {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=El+nombre+de+usuario+ya+existe");
+    }
+    $stmt->close();
+    exit;
+}
+
+if ($action == 'edit_admin') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id       = intval($_POST['adm_id']       ?? 0);
+    $nombre   = trim($_POST['adm_nombre']     ?? '');
+    $usuario  = trim($_POST['adm_usuario']    ?? '');
+    $telefono = trim($_POST['adm_telefono']   ?? '');
+    $sucursal = intval($_POST['adm_sucursal'] ?? 0);
+    $password = trim($_POST['adm_password']   ?? '');
+
+    if (!$id || !$nombre || !$usuario || !$sucursal) {
+        header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Datos+incompletos");
+        exit;
+    }
+    if ($password !== '') {
+        if (strlen($password) < 8) {
+            header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Contraseña+mínimo+8+caracteres");
+            exit;
+        }
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("UPDATE usuarios SET nombre=?, usuario=?, telefono=?, sucursal_id=?, password=? WHERE id=? AND rol='admin'");
+        $stmt->bind_param("sssisi", $nombre, $usuario, $telefono, $sucursal, $hash, $id);
+    } else {
+        $stmt = $conn->prepare("UPDATE usuarios SET nombre=?, usuario=?, telefono=?, sucursal_id=? WHERE id=? AND rol='admin'");
+        $stmt->bind_param("sssii", $nombre, $usuario, $telefono, $sucursal, $id);
+    }
+    $stmt->execute();
+    $stmt->close();
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Administrador+actualizado");
+    exit;
+}
+
+if ($action == 'delete_admin') {
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id = intval($_POST['adm_id'] ?? 0);
+    if ($id) {
+        $stmt = $conn->prepare("DELETE FROM usuarios WHERE id=? AND rol='admin'");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
+    }
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Administrador+eliminado");
+    exit;
+}

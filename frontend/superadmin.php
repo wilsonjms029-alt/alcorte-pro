@@ -554,11 +554,15 @@ $plan_colors = [
         </script>
 
         <!-- ══════════════ SUCURSALES ══════════════ -->
-        <?php elseif($page == 'barbershops'): ?>
+        <?php elseif($page == 'barbershops'):
+            $admins_map = [];
+            $r = $conn->query("SELECT id, nombre, usuario, telefono, sucursal_id FROM usuarios WHERE rol='admin' AND sucursal_id > 0");
+            if ($r) while ($row = $r->fetch_assoc()) $admins_map[$row['sucursal_id']] = $row;
+        ?>
 
         <div class="page-header">
             <h1 class="page-title">Gestión de <span>Tiendas</span></h1>
-            <p class="page-subtitle">Registro y administración de tiendas del sistema.</p>
+            <p class="page-subtitle">Registro y administración de tiendas y sus administradores.</p>
         </div>
 
         <div class="grid-2">
@@ -589,20 +593,44 @@ $plan_colors = [
                 <div class="card-header"><h3>Tiendas en el Sistema</h3></div>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Nombre</th><th>Dirección</th><th style="text-align:right">Acciones</th></tr></thead>
+                        <thead><tr><th>Tienda</th><th>Administrador</th><th style="text-align:right">Acciones</th></tr></thead>
                         <tbody>
                         <?php if(empty($sucursales_arr)): ?>
                         <tr><td colspan="3" style="text-align:center;padding:40px;color:#94a3b8">Sin tiendas registradas. Crea la primera con el formulario.</td></tr>
                         <?php endif; ?>
-                        <?php foreach($sucursales_arr as $s): ?>
+                        <?php foreach($sucursales_arr as $s):
+                            $adm = $admins_map[$s['id']] ?? null;
+                        ?>
                         <tr>
-                            <td style="font-weight:800"><?php echo htmlspecialchars($s['nombre']); ?></td>
-                            <td style="font-size:12px;color:#64748b"><?php echo htmlspecialchars($s['direccion'] ?? '—'); ?></td>
+                            <td>
+                                <div style="font-weight:800"><?php echo htmlspecialchars($s['nombre']); ?></div>
+                                <div style="font-size:11px;color:#94a3b8;margin-top:2px"><?php echo htmlspecialchars($s['direccion'] ?? '—'); ?></div>
+                            </td>
+                            <td>
+                                <?php if ($adm): ?>
+                                <div style="font-weight:600;font-size:13px;color:#111827"><?php echo htmlspecialchars($adm['nombre']); ?></div>
+                                <div style="font-size:11px;color:#94a3b8;font-family:monospace">@<?php echo htmlspecialchars($adm['usuario']); ?></div>
+                                <?php else: ?>
+                                <span style="color:#94a3b8;font-size:12px;font-style:italic">Sin admin</span>
+                                <?php endif; ?>
+                            </td>
                             <td style="text-align:right">
-                                <div style="display:flex;justify-content:flex-end;gap:6px">
+                                <div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap">
                                     <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>')" class="btn btn-ghost btn-sm">
-                                        <i class="fas fa-pen"></i> Editar
+                                        <i class="fas fa-pen"></i> Tienda
                                     </button>
+                                    <button onclick="openAdmForm(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>',<?php echo $adm ? $adm['id'] : 0; ?>,'<?php echo htmlspecialchars($adm['nombre']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['usuario']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['telefono']??'',ENT_QUOTES); ?>')"
+                                        class="btn btn-sm" style="background:<?php echo $adm?'#dbeafe':'#f0fdf4'; ?>;color:<?php echo $adm?'#1d4ed8':'#166534'; ?>;border:none;cursor:pointer;font-weight:600;font-size:12px;padding:5px 10px;border-radius:6px">
+                                        <i class="fas fa-<?php echo $adm?'user-pen':'user-plus'; ?>"></i> <?php echo $adm?'Admin':'+ Admin'; ?>
+                                    </button>
+                                    <?php if ($adm): ?>
+                                    <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Quitar el admin de esta tienda?')">
+                                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                        <input type="hidden" name="action" value="delete_admin">
+                                        <input type="hidden" name="adm_id" value="<?php echo $adm['id']; ?>">
+                                        <button type="submit" class="btn btn-danger btn-sm" title="Quitar admin"><i class="fas fa-user-xmark"></i></button>
+                                    </form>
+                                    <?php endif; ?>
                                     <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda?')">
                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                         <input type="hidden" name="action" value="delete_sucursal">
@@ -618,7 +646,73 @@ $plan_colors = [
                 </div>
             </div>
         </div>
+
+        <!-- FORMULARIO ADMIN (aparece al pulsar + Admin o Admin) -->
+        <div id="admFormWrap" style="display:none;margin-top:24px;">
+            <div class="card" style="max-width:480px">
+                <div class="card-header"><h3 id="admFormTitle">Asignar Administrador</h3></div>
+                <div class="card-body">
+                    <form action="../backend/processing/superadmin.php" method="POST">
+                        <input type="hidden" name="csrf_token"   value="<?php echo csrf_generate(); ?>">
+                        <input type="hidden" id="af_action"      name="action"       value="add_admin">
+                        <input type="hidden" id="af_id"          name="adm_id"       value="">
+                        <input type="hidden" id="af_sucursal"    name="adm_sucursal" value="">
+                        <div class="form-group">
+                            <label class="form-label">Tienda</label>
+                            <input type="text" id="af_tienda_lbl" class="form-input" disabled style="background:#f9fafb;color:#6b7280">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Nombre completo</label>
+                            <input type="text" id="af_nombre" name="adm_nombre" class="form-input" placeholder="Ej. Juan Pérez" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Usuario</label>
+                            <input type="text" id="af_usuario" name="adm_usuario" class="form-input" placeholder="Ej. juanp" autocomplete="off" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" id="af_pass_lbl">Contraseña</label>
+                            <input type="password" id="af_password" name="adm_password" class="form-input" placeholder="Mín. 8 caracteres" autocomplete="new-password">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Teléfono</label>
+                            <input type="text" id="af_telefono" name="adm_telefono" class="form-input" placeholder="Opcional">
+                        </div>
+                        <div style="display:flex;gap:8px">
+                            <button type="submit" class="btn btn-gold" style="flex:1;justify-content:center"><i class="fas fa-save"></i> Guardar</button>
+                            <button type="button" onclick="closeAdmForm()" class="btn btn-ghost">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <script>
+        function openAdmForm(suc_id, suc_nombre, adm_id, adm_nombre, adm_usuario, adm_telefono) {
+            document.getElementById('af_sucursal').value   = suc_id;
+            document.getElementById('af_tienda_lbl').value = suc_nombre;
+            document.getElementById('af_nombre').value     = adm_nombre;
+            document.getElementById('af_usuario').value    = adm_usuario;
+            document.getElementById('af_telefono').value   = adm_telefono;
+            document.getElementById('af_password').value   = '';
+            if (adm_id > 0) {
+                document.getElementById('af_id').value = adm_id;
+                document.getElementById('af_action').value = 'edit_admin';
+                document.getElementById('admFormTitle').textContent = 'Editar Admin — ' + suc_nombre;
+                document.getElementById('af_pass_lbl').textContent  = 'Nueva contraseña (vacío = sin cambios)';
+                document.getElementById('af_password').removeAttribute('required');
+            } else {
+                document.getElementById('af_id').value = '';
+                document.getElementById('af_action').value = 'add_admin';
+                document.getElementById('admFormTitle').textContent = 'Asignar Admin — ' + suc_nombre;
+                document.getElementById('af_pass_lbl').textContent  = 'Contraseña';
+                document.getElementById('af_password').setAttribute('required','');
+            }
+            document.getElementById('admFormWrap').style.display = 'block';
+            document.getElementById('admFormWrap').scrollIntoView({ behavior:'smooth', block:'start' });
+        }
+        function closeAdmForm() {
+            document.getElementById('admFormWrap').style.display = 'none';
+        }
         function editSuc(id,nombre,dir){
             document.getElementById('shop_id').value=id;
             document.getElementById('shop_name').value=nombre;

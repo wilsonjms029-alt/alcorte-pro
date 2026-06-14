@@ -103,6 +103,18 @@ CREATE TABLE IF NOT EXISTS pagos_suscripcion (
     FOREIGN KEY (plan_id) REFERENCES planes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS servicios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    duracion VARCHAR(50) DEFAULT '30 min',
+    precio VARCHAR(50) DEFAULT '',
+    icono VARCHAR(80) DEFAULT 'fas fa-cut',
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    sucursal_id INT NOT NULL DEFAULT 1,
+    orden INT NOT NULL DEFAULT 0,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Sede Central (sucursal base del sistema, id fijo = 1)
 INSERT IGNORE INTO sucursales (id, nombre, direccion, activo)
 VALUES (1, 'Sede Central', 'Casa matriz del negocio', 1);

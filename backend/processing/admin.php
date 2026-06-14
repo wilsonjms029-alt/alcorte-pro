@@ -164,6 +164,51 @@ if ($action == 'delete_barbero') {
     exit;
 }
 
+// --- CRUD: SERVICIOS ---
+if ($action == 'add_servicio') {
+    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=servicios&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $nombre   = trim($_POST['svc_nombre'] ?? '');
+    $duracion = trim($_POST['svc_duracion'] ?? '30 min');
+    $precio   = trim($_POST['svc_precio'] ?? '');
+    $icono    = trim($_POST['svc_icono'] ?? 'fas fa-cut');
+    $orden    = intval($_POST['svc_orden'] ?? 0);
+    $suc_id   = ($scope_id !== null) ? $scope_id : 1;
+    if ($nombre) {
+        $stmt = $conn->prepare("INSERT INTO servicios (nombre, duracion, precio, icono, orden, sucursal_id) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssssii", $nombre, $duracion, $precio, $icono, $orden, $suc_id);
+        $stmt->execute(); $stmt->close();
+    }
+    header("Location: ../../frontend/admin.php?page=servicios&msg=Servicio+agregado"); exit;
+}
+
+if ($action == 'edit_servicio') {
+    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=servicios&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id       = intval($_POST['svc_id']);
+    $nombre   = trim($_POST['svc_nombre'] ?? '');
+    $duracion = trim($_POST['svc_duracion'] ?? '30 min');
+    $precio   = trim($_POST['svc_precio'] ?? '');
+    $icono    = trim($_POST['svc_icono'] ?? 'fas fa-cut');
+    $activo   = isset($_POST['svc_activo']) ? 1 : 0;
+    $orden    = intval($_POST['svc_orden'] ?? 0);
+    $suc_id   = ($scope_id !== null) ? $scope_id : 1;
+    $stmt = $conn->prepare("UPDATE servicios SET nombre=?, duracion=?, precio=?, icono=?, activo=?, orden=? WHERE id=? AND sucursal_id=?");
+    $stmt->bind_param("ssssiiii", $nombre, $duracion, $precio, $icono, $activo, $orden, $id, $suc_id);
+    $stmt->execute(); $stmt->close();
+    header("Location: ../../frontend/admin.php?page=servicios&msg=Servicio+actualizado"); exit;
+}
+
+if ($action == 'delete_servicio') {
+    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=servicios&msg=Error+de+seguridad"); exit; }
+    csrf_regenerate();
+    $id     = intval($_POST['svc_id']);
+    $suc_id = ($scope_id !== null) ? $scope_id : 1;
+    $stmt = $conn->prepare("DELETE FROM servicios WHERE id=? AND sucursal_id=?");
+    $stmt->bind_param("ii", $id, $suc_id); $stmt->execute(); $stmt->close();
+    header("Location: ../../frontend/admin.php?page=servicios&msg=Servicio+eliminado"); exit;
+}
+
 // --- ACTUALIZAR CONFIGURACIÓN DE MÉTODOS DE PAGO Y DATOS DE CUENTA ---
 if ($action == 'update_sys_settings') {
     if (!csrf_validate()) {
@@ -184,13 +229,17 @@ if ($action == 'update_sys_settings') {
     $zelle_email = trim($_POST['zelle_email']);
 
     $payload = [
-        'estado_pago_movil' => $estado_pago_movil,
-        'estado_zelle' => $estado_zelle,
-        'estado_efectivo' => $estado_efectivo,
-        'banco_nombre' => $banco_nombre,
-        'banco_telefono' => $banco_telefono,
-        'banco_ci' => $banco_ci,
-        'zelle_email' => $zelle_email
+        'estado_pago_movil'  => $estado_pago_movil,
+        'estado_zelle'       => $estado_zelle,
+        'estado_efectivo'    => $estado_efectivo,
+        'banco_nombre'       => $banco_nombre,
+        'banco_telefono'     => $banco_telefono,
+        'banco_ci'           => $banco_ci,
+        'zelle_email'        => $zelle_email,
+        'direccion'          => trim($_POST['direccion'] ?? ''),
+        'horario'            => trim($_POST['horario'] ?? ''),
+        'contacto'           => trim($_POST['contacto'] ?? ''),
+        'politica_reserva'   => trim($_POST['politica_reserva'] ?? ''),
     ];
 
     $stmt = $conn->prepare("INSERT INTO configuracion (clave, valor, sucursal_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE valor = ?");
