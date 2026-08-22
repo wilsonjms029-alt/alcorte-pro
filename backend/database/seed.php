@@ -8,6 +8,7 @@
  * No toca al usuario admin ni a la Sede Central (id=1).
  */
 require_once '../config/config.php';
+require_superadmin_web();
 
 mt_srand(2026); // resultados reproducibles
 $ok = [];

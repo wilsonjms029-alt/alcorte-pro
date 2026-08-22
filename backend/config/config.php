@@ -243,6 +243,38 @@ function upload_public_url(string $subdir, string $filename): string {
     return ($base ? $base . '/' : '/') . $path;
 }
 
+/** Normaliza el token público de tienda (32 hex). */
+function store_token_normalize(string $raw): string {
+    return preg_replace('/[^a-f0-9]/', '', strtolower($raw));
+}
+
+/** Resuelve sucursal_id desde token de tienda; null si inválido. */
+function store_id_from_token(mysqli $conn, string $raw_token): ?int {
+    $token = store_token_normalize($raw_token);
+    if (strlen($token) !== 32) {
+        return null;
+    }
+    $stmt = $conn->prepare("SELECT id FROM sucursales WHERE token = ? AND activo = 1 LIMIT 1");
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ? (int) $row['id'] : null;
+}
+
+/** Exige sesión SuperAdmin (setup, seed, scripts de mantenimiento). */
+function require_superadmin_web(): void {
+    if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
+        http_response_code(403);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>403</title></head>'
+            . '<body style="font-family:sans-serif;padding:40px;color:#334155">'
+            . '<h1>Acceso denegado</h1><p>Esta operación requiere SuperAdmin.</p>'
+            . '<p><a href="../../frontend/superadmin.php">Ir al panel</a></p></body></html>';
+        exit;
+    }
+}
+
 // ─────────── Plan de sucursal ───────────
 function get_plan_sucursal(mysqli $conn, int $sucursal_id): ?array {
     $stmt = $conn->prepare(

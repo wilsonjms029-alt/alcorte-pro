@@ -2,11 +2,15 @@
 require_once '../config/config.php';
 header('Content-Type: application/json');
 
-$telefono = preg_replace('/\D/', '', trim($_GET['telefono'] ?? ''));
-$suc_id   = intval($_GET['sucursal_id'] ?? 0);
+$suc_id = store_id_from_token($conn, $_GET['t'] ?? '');
+if (!$suc_id) {
+    echo json_encode(['citas' => [], 'pedidos' => []]);
+    exit;
+}
 
-if (!$telefono || !$suc_id) {
-    echo json_encode(['citas' => []]);
+$telefono = preg_replace('/\D/', '', trim($_GET['telefono'] ?? ''));
+if (!$telefono || strlen($telefono) < 7) {
+    echo json_encode(['citas' => [], 'pedidos' => []]);
     exit;
 }
 
@@ -24,7 +28,9 @@ $stmt->execute();
 $res = $stmt->get_result();
 
 $citas = [];
-while ($row = $res->fetch_assoc()) $citas[] = $row;
+while ($row = $res->fetch_assoc()) {
+    $citas[] = $row;
+}
 $stmt->close();
 
 $pedidos = [];
@@ -40,18 +46,18 @@ $stmt2->execute();
 $res2 = $stmt2->get_result();
 
 while ($row2 = $res2->fetch_assoc()) {
-    $ped_id = intval($row2['id']);
+    $ped_id = (int) $row2['id'];
     $stmt3 = $conn->prepare("SELECT nombre_producto, cantidad, precio_unitario FROM pedido_detalles WHERE pedido_id = ?");
     $stmt3->bind_param("i", $ped_id);
     $stmt3->execute();
     $res3 = $stmt3->get_result();
-    
+
     $articulos = [];
     while ($row3 = $res3->fetch_assoc()) {
         $articulos[] = $row3;
     }
     $stmt3->close();
-    
+
     $row2['articulos'] = $articulos;
     $pedidos[] = $row2;
 }
@@ -59,6 +65,5 @@ $stmt2->close();
 
 echo json_encode([
     'citas' => $citas,
-    'pedidos' => $pedidos
+    'pedidos' => $pedidos,
 ]);
-?>

@@ -76,6 +76,10 @@ if ($res_conf) while ($row = $res_conf->fetch_assoc()) $config[$row['clave']] = 
 
 // ── PROCESS BOOKING ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'agendar') {
+    if (!csrf_validate()) {
+        $msg = 'Token de seguridad inválido. Recarga la página e intenta de nuevo.';
+        $msg_type = 'error';
+    } else {
     csrf_regenerate();
     $nombre     = trim($_POST['cliente_nombre']   ?? '');
     $telefono   = trim($_POST['cliente_telefono'] ?? '');
@@ -105,6 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'agend
 
         if (!$bdata) {
             $error_val = "El especialista seleccionado no está disponible.";
+        } elseif ((int) ($bdata['sucursal_id'] ?? 0) !== (int) $sucursal_id) {
+            $error_val = "El especialista no pertenece a esta tienda.";
         } else {
             $t    = strtotime($hora);
             $ini  = strtotime($bdata['hora_inicio']);
@@ -154,10 +160,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'agend
         }
         $stmt->close();
     }
+    }
 }
 
 // ── PROCESS PRODUCT ORDER ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear_pedido' && $has_productos) {
+    if (!csrf_validate()) {
+        $msg = 'Token de seguridad inválido. Recarga la página e intenta de nuevo.';
+        $msg_type = 'error';
+    } else {
     csrf_regenerate();
         $nombre     = trim($_POST['cliente_nombre']   ?? '');
         $telefono   = trim($_POST['cliente_telefono'] ?? '');
@@ -243,6 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear
                 }
             }
         }
+    }
 }
 
 // ── LOAD BARBERS ──
@@ -1132,6 +1144,7 @@ function fmtBs(usdStr) {
 
 // ── STATE ──
 let ST = { svc:'', precio:'', bid:0, bnom:'', fecha:'', hora:'' };
+const STORE_TOKEN = <?= json_encode($token) ?>;
 const MN  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MNA = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const DNA = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -1279,7 +1292,7 @@ function selSpec(card, id, nom) {
 
 function fetchBloqueos() {
     if (!ST.bid || !ST.fecha) { bloqueos_cache = []; return; }
-    fetch(`../backend/api/bloqueos.php?barbero_id=${ST.bid}&fecha=${ST.fecha}`)
+    fetch(`../backend/api/bloqueos.php?barbero_id=${ST.bid}&fecha=${ST.fecha}&t=${encodeURIComponent(STORE_TOKEN)}`)
         .then(r => r.json())
         .then(data => { bloqueos_cache = data.bloqueos || []; renderTimeGroups(); })
         .catch(() => { bloqueos_cache = []; });
@@ -1655,6 +1668,7 @@ document.addEventListener('DOMContentLoaded', updateCartUI);
 
 <script>
 const SUC_ID = <?= json_encode($sucursal_id) ?>;
+const STORE_TOKEN = <?= json_encode($token) ?>;
 const MN_C = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 function fmtFecha(f) {
@@ -1690,7 +1704,7 @@ function buscarCitas() {
     btn.innerHTML = '<span class="spinner"></span> Buscando...';
     btn.disabled = true;
 
-    fetch(`../backend/api/mis_citas.php?telefono=${encodeURIComponent(tel)}&sucursal_id=${SUC_ID}`)
+    fetch(`../backend/api/mis_citas.php?telefono=${encodeURIComponent(tel)}&t=${encodeURIComponent(STORE_TOKEN)}`)
         .then(r => r.text())
         .then(text => {
             let data;
@@ -1845,7 +1859,7 @@ function cancelarCita(citaId) {
     fetch('../backend/api/cancelar_cita.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ cita_id: citaId, telefono: tel })
+        body: JSON.stringify({ cita_id: citaId, telefono: tel, t: STORE_TOKEN })
     })
     .then(r => r.json())
     .then(data => {

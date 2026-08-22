@@ -1,1 +1,13 @@
 Options -Indexes
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule ^backend/config/ - [F,L]
+RewriteRule ^backend/logs/ - [F,L]
+</IfModule>
+
+<FilesMatch "^(scratch_db|upgrade_pro|upgrade_king_barber)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>

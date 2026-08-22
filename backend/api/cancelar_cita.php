@@ -7,19 +7,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$data = json_decode(file_get_contents('php://input'), true);
-$cita_id  = intval($data['cita_id'] ?? 0);
+$data = json_decode(file_get_contents('php://input'), true) ?: [];
+$suc_id = store_id_from_token($conn, $data['t'] ?? '');
+$cita_id = (int) ($data['cita_id'] ?? 0);
 $telefono = preg_replace('/\D/', '', trim($data['telefono'] ?? ''));
 
-if (!$cita_id || !$telefono) {
+if (!$suc_id || !$cita_id || !$telefono || strlen($telefono) < 7) {
     echo json_encode(['ok' => false, 'error' => 'Datos incompletos']);
     exit;
 }
 
 $stmt = $conn->prepare(
-    "SELECT id, fecha, hora, estado FROM citas WHERE id = ? AND cliente_telefono = ?"
+    "SELECT id, fecha, hora, estado FROM citas
+     WHERE id = ? AND cliente_telefono = ? AND sucursal_id = ?"
 );
-$stmt->bind_param("is", $cita_id, $telefono);
+$stmt->bind_param("isi", $cita_id, $telefono, $suc_id);
 $stmt->execute();
 $cita = $stmt->get_result()->fetch_assoc();
 $stmt->close();
@@ -47,8 +49,8 @@ if ($cita_datetime < $limite) {
     exit;
 }
 
-$upd = $conn->prepare("UPDATE citas SET estado = 'cancelada' WHERE id = ?");
-$upd->bind_param("i", $cita_id);
+$upd = $conn->prepare("UPDATE citas SET estado = 'cancelada' WHERE id = ? AND sucursal_id = ?");
+$upd->bind_param("ii", $cita_id, $suc_id);
 $upd->execute();
 $upd->close();
 
