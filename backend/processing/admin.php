@@ -1,31 +1,35 @@
 <?php
-session_start();
 require_once '../config/config.php';
+require_once __DIR__ . '/../api/helpers.php';
 
 $allowed_roles = ['admin', 'superadmin', 'gerente'];
 if (!isset($_SESSION['rol']) || !in_array($_SESSION['rol'], $allowed_roles)) {
+    if (defined('ALCORTE_API_REQUEST')) {
+        api_err('No autorizado', 401);
+    }
     header("Location: ../../");
     exit;
 }
 
-// Scoping helper
-function get_scope_sucursal_id(): ?int {
-    $rol = $_SESSION['rol'];
-    if ($rol === 'superadmin') {
-        $suc = intval($_SESSION['admin_suc'] ?? 0);
-        return $suc > 0 ? $suc : null;
+if (!function_exists('admin_get_scope_sucursal_id')) {
+    function admin_get_scope_sucursal_id(): ?int {
+        return api_scope_sucursal_id();
     }
-    return intval($_SESSION['sucursal_id'] ?? 0) ?: null;
 }
 
-$scope_id = get_scope_sucursal_id();
+if (!function_exists('admin_handle_upload')) {
+    function admin_handle_upload(string $field, string $subdir): ?string {
+        return api_handle_upload($field, $subdir);
+    }
+}
+
+$scope_id = admin_get_scope_sucursal_id();
 $action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 
 // --- CRUD: CLIENTES ---
 if ($action == 'add_cliente') {
     if (!csrf_validate()) {
-        header("Location: ../../frontend/admin.php?page=clientes&msg=Error+de+seguridad");
-        exit;
+        api_admin_finish('Error de seguridad', 'clientes');
     }
     csrf_regenerate();
 
@@ -37,81 +41,30 @@ if ($action == 'add_cliente') {
     $stmt->bind_param("ssisi", $telefono, $nombre, $puntos, $nombre, $puntos);
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/admin.php?page=clientes&msg=Cliente+guardado+correctamente");
-    exit;
+    api_admin_finish('Cliente guardado correctamente', 'clientes');
 }
 
 if ($action == 'delete_cliente') {
     if (!csrf_validate()) {
-        header("Location: ../../frontend/admin.php?page=clientes&msg=Error+de+seguridad");
-        exit;
+        api_admin_finish('Error de seguridad', 'clientes');
     }
     csrf_regenerate();
 
-    $telefono = $_GET['id'];
+    $telefono = trim((string) ($_REQUEST['id'] ?? $_POST['id'] ?? $_GET['id'] ?? ''));
+    if ($telefono === '') {
+        api_admin_finish('Cliente no válido', 'clientes');
+    }
     $stmt = $conn->prepare("DELETE FROM clientes WHERE telefono = ?");
     $stmt->bind_param("s", $telefono);
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/admin.php?page=clientes&msg=Cliente+eliminado+de+la+base+de+datos");
-    exit;
+    api_admin_finish('Cliente eliminado de la base de datos', 'clientes');
 }
 
 // --- CRUD: PERSONAL / BARBEROS ---
-function handle_upload(string $field, string $subdir): ?string {
-    if (empty($_FILES[$field]['tmp_name'])) {
-        return null;
-    }
-    $file = $_FILES[$field];
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        error_log("Upload {$field}: error code {$file['error']}");
-        return null;
-    }
-
-    $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, $allowed_ext, true)) {
-        return null;
-    }
-
-    $allowed_mime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    $mime_ok = false;
-    if (function_exists('mime_content_type')) {
-        $mime_ok = in_array(mime_content_type($file['tmp_name']), $allowed_mime, true);
-    }
-    if (!$mime_ok && function_exists('finfo_open')) {
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        if ($finfo) {
-            $detected = finfo_file($finfo, $file['tmp_name']);
-            finfo_close($finfo);
-            $mime_ok = in_array($detected, $allowed_mime, true);
-        }
-    }
-    if (!$mime_ok) {
-        $mime_ok = in_array($ext, $allowed_ext, true);
-    }
-    if (!$mime_ok) {
-        error_log("Upload {$field}: tipo de archivo no permitido");
-        return null;
-    }
-
-    $name = uniqid('img_', true) . '.' . $ext;
-    $dir  = dirname(__DIR__, 2) . '/uploads/' . trim($subdir, '/') . '/';
-    if (!is_dir($dir) && !mkdir($dir, 0775, true)) {
-        error_log("Upload {$field}: no se pudo crear directorio {$dir}");
-        return null;
-    }
-    if (!move_uploaded_file($file['tmp_name'], $dir . $name)) {
-        error_log("Upload {$field}: move_uploaded_file falló");
-        return null;
-    }
-    return upload_public_url($subdir, $name);
-}
-
 if ($action == 'add_barbero') {
     if (!csrf_validate()) {
-        header("Location: ../../frontend/admin.php?page=personal&msg=Error+de+seguridad");
-        exit;
+        api_admin_finish('Error de seguridad', 'personal');
     }
     csrf_regenerate();
 
@@ -141,16 +94,15 @@ if ($action == 'add_barbero') {
         $total_barberos = $cnt_stmt->get_result()->fetch_assoc()['total'];
         $cnt_stmt->close();
         if ($total_barberos >= $plan['max_barberos']) {
-            $msg = urlencode("Tu plan {$plan['nombre']} permite máximo {$plan['max_barberos']} barbero(s). Mejora tu plan para agregar más.");
-            header("Location: ../../frontend/admin.php?page=personal&msg=$msg");
-            exit;
+            $msg = "Tu plan {$plan['nombre']} permite máximo {$plan['max_barberos']} barbero(s). Mejora tu plan para agregar más.";
+            api_admin_finish($msg, 'personal');
         }
     }
 
     $barb_usuario    = trim($_POST['barb_usuario'] ?? '');
     $barb_password   = trim($_POST['barb_password'] ?? '');
 
-    $uploaded = handle_upload('foto_file', 'barberos');
+    $uploaded = admin_handle_upload('foto_file', 'barberos');
     $foto_url = $uploaded
         ?? (trim($_POST['foto_url'] ?? '') ?: 'https://ui-avatars.com/api/?background=333&color=fff&name=' . urlencode($nombre));
 
@@ -163,29 +115,25 @@ if ($action == 'add_barbero') {
     // Crear usuario si se proporcionaron credenciales
     if ($barb_usuario !== '' && $barb_password !== '') {
         if (strlen($barb_password) < 8) {
-            header("Location: ../../frontend/admin.php?page=personal&msg=Barbero+creado+pero+la+contraseña+debe+tener+mínimo+8+caracteres");
-            exit;
+            api_admin_finish('Barbero creado pero la contraseña debe tener mínimo 8 caracteres', 'personal');
         }
         $hash = password_hash($barb_password, PASSWORD_BCRYPT);
         $stmt2 = $conn->prepare("INSERT INTO usuarios (usuario, password, nombre, rol, sucursal_id, barbero_id) VALUES (?, ?, ?, 'barbero', ?, ?)");
         $stmt2->bind_param("sssii", $barb_usuario, $hash, $nombre, $sucursal_id, $nuevo_barbero_id);
         if (!$stmt2->execute()) {
             $stmt2->close();
-            header("Location: ../../frontend/admin.php?page=personal&msg=Barbero+creado+pero+el+usuario+ya+existe");
-            exit;
+            api_admin_finish('Barbero creado pero el usuario ya existe', 'personal');
         }
         $stmt2->close();
-        header("Location: ../../frontend/admin.php?page=personal&msg=Barbero+y+usuario+creados+exitosamente");
+        api_admin_finish('Barbero y usuario creados exitosamente', 'personal');
     } else {
-        header("Location: ../../frontend/admin.php?page=personal&msg=Barbero+registrado+exitosamente");
+        api_admin_finish('Barbero registrado exitosamente', 'personal');
     }
-    exit;
 }
 
 if ($action == 'edit_barbero') {
     if (!csrf_validate()) {
-        header("Location: ../../frontend/admin.php?page=personal&msg=Error+de+seguridad");
-        exit;
+        api_admin_finish('Error de seguridad', 'personal');
     }
     csrf_regenerate();
 
@@ -196,7 +144,7 @@ if ($action == 'edit_barbero') {
     $almuerzo_inicio = $_POST['almuerzo_inicio'];
     $almuerzo_fin = $_POST['almuerzo_fin'];
     $activo   = isset($_POST['activo']) ? 1 : 0;
-    $uploaded = handle_upload('foto_file', 'barberos');
+    $uploaded = admin_handle_upload('foto_file', 'barberos');
     $foto_url_new = $uploaded ?? (trim($_POST['foto_url'] ?? '') ?: null);
 
     if ($scope_id !== null) {
@@ -218,14 +166,12 @@ if ($action == 'edit_barbero') {
     }
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/admin.php?page=personal&msg=Barbero+actualizado");
-    exit;
+    api_admin_finish('Barbero actualizado', 'personal');
 }
 
 if ($action == 'delete_barbero') {
     if (!csrf_validate()) {
-        header("Location: ../../frontend/admin.php?page=personal&msg=Error+de+seguridad");
-        exit;
+        api_admin_finish('Error de seguridad', 'personal');
     }
     csrf_regenerate();
 
@@ -247,19 +193,18 @@ if ($action == 'delete_barbero') {
     }
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/admin.php?page=personal&msg=Barbero+y+usuario+eliminados+correctamente");
-    exit;
+    api_admin_finish('Barbero y usuario eliminados correctamente', 'personal');
 }
 
 // --- CRUD: SERVICIOS ---
 if ($action == 'add_servicio') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=servicios&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'servicios'); }
     csrf_regenerate();
     $nombre     = trim($_POST['svc_nombre'] ?? '');
     $duracion   = trim($_POST['svc_duracion'] ?? '30 min');
     $precio     = trim($_POST['svc_precio'] ?? '');
     $icono      = trim($_POST['svc_icono'] ?? 'fas fa-cut');
-    $uploaded    = handle_upload('svc_imagen_file', 'servicios');
+    $uploaded    = admin_handle_upload('svc_imagen_file', 'servicios');
     $imagen_url  = $uploaded ?? (trim($_POST['svc_imagen'] ?? '') ?: null);
     $descripcion = trim($_POST['svc_descripcion'] ?? '');
     $orden       = intval($_POST['svc_orden'] ?? 0);
@@ -269,18 +214,18 @@ if ($action == 'add_servicio') {
         $stmt->bind_param("ssssssii", $nombre, $duracion, $precio, $icono, $imagen_url, $descripcion, $orden, $suc_id);
         $stmt->execute(); $stmt->close();
     }
-    header("Location: ../../frontend/admin.php?page=servicios&msg=Servicio+agregado"); exit;
+    api_admin_finish('Servicio agregado', 'servicios');
 }
 
 if ($action == 'edit_servicio') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=servicios&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'servicios'); }
     csrf_regenerate();
     $id         = intval($_POST['svc_id']);
     $nombre     = trim($_POST['svc_nombre'] ?? '');
     $duracion   = trim($_POST['svc_duracion'] ?? '30 min');
     $precio     = trim($_POST['svc_precio'] ?? '');
     $icono      = trim($_POST['svc_icono'] ?? 'fas fa-cut');
-    $uploaded    = handle_upload('svc_imagen_file', 'servicios');
+    $uploaded    = admin_handle_upload('svc_imagen_file', 'servicios');
     $imagen_url  = $uploaded ?? (trim($_POST['svc_imagen'] ?? '') ?: null);
     $descripcion = trim($_POST['svc_descripcion'] ?? '');
     $activo      = isset($_POST['svc_activo']) ? 1 : 0;
@@ -289,22 +234,22 @@ if ($action == 'edit_servicio') {
     $stmt = $conn->prepare("UPDATE servicios SET nombre=?, duracion=?, precio=?, icono=?, imagen_url=?, descripcion=?, activo=?, orden=? WHERE id=? AND sucursal_id=?");
     $stmt->bind_param("ssssssiiii", $nombre, $duracion, $precio, $icono, $imagen_url, $descripcion, $activo, $orden, $id, $suc_id);
     $stmt->execute(); $stmt->close();
-    header("Location: ../../frontend/admin.php?page=servicios&msg=Servicio+actualizado"); exit;
+    api_admin_finish('Servicio actualizado', 'servicios');
 }
 
 if ($action == 'delete_servicio') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=servicios&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'servicios'); }
     csrf_regenerate();
     $id     = intval($_POST['svc_id']);
     $suc_id = ($scope_id !== null) ? $scope_id : 1;
     $stmt = $conn->prepare("DELETE FROM servicios WHERE id=? AND sucursal_id=?");
     $stmt->bind_param("ii", $id, $suc_id); $stmt->execute(); $stmt->close();
-    header("Location: ../../frontend/admin.php?page=servicios&msg=Servicio+eliminado"); exit;
+    api_admin_finish('Servicio eliminado', 'servicios');
 }
 
 // --- CRUD: BLOQUEOS DE HORARIO ---
 if ($action == 'add_bloqueo') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=personal&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'personal'); }
     csrf_regenerate();
     $barbero_id    = intval($_POST['bloqueo_barbero_id']);
     $fecha         = trim($_POST['bloqueo_fecha']);
@@ -315,30 +260,29 @@ if ($action == 'add_bloqueo') {
     $suc_id        = ($scope_id !== null) ? $scope_id : 1;
 
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || $fecha < date('Y-m-d')) {
-        header("Location: ../../frontend/admin.php?page=personal&msg=Fecha+inválida"); exit;
+        api_admin_finish('Fecha inválida', 'personal');
     }
 
     $stmt = $conn->prepare("INSERT INTO bloqueos_horario (barbero_id, fecha, hora_inicio, hora_fin, dia_completo, motivo, sucursal_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("isssisi", $barbero_id, $fecha, $hora_inicio, $hora_fin, $dia_completo, $motivo, $suc_id);
     $stmt->execute(); $stmt->close();
-    header("Location: ../../frontend/admin.php?page=personal&msg=Bloqueo+registrado"); exit;
+    api_admin_finish('Bloqueo registrado', 'personal');
 }
 
 if ($action == 'delete_bloqueo') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=personal&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'personal'); }
     csrf_regenerate();
     $id     = intval($_POST['bloqueo_id']);
     $suc_id = ($scope_id !== null) ? $scope_id : 1;
     $stmt = $conn->prepare("DELETE FROM bloqueos_horario WHERE id = ? AND sucursal_id = ?");
     $stmt->bind_param("ii", $id, $suc_id); $stmt->execute(); $stmt->close();
-    header("Location: ../../frontend/admin.php?page=personal&msg=Bloqueo+eliminado"); exit;
+    api_admin_finish('Bloqueo eliminado', 'personal');
 }
 
 // --- ACTUALIZAR CONFIGURACIÓN GENERAL Y MÉTODOS DE PAGO ---
 if ($action == 'update_sys_settings') {
     if (!csrf_validate()) {
-        header("Location: ../../frontend/admin.php?page=ajustes&msg=Error+de+seguridad");
-        exit;
+        api_admin_finish('Error de seguridad', 'ajustes');
     }
     csrf_regenerate();
 
@@ -357,7 +301,7 @@ if ($action == 'update_sys_settings') {
     $binance_pay_id = trim($_POST['binance_pay_id'] ?? '');
     $paypal_email = trim($_POST['paypal_email'] ?? '');
 
-    $uploaded_logo = handle_upload('logo_file', 'logos');
+    $uploaded_logo = admin_handle_upload('logo_file', 'logos');
     $logo_url_input = trim($_POST['logo_url'] ?? '');
     $logo_url = $uploaded_logo ?? ($logo_url_input !== '' ? $logo_url_input : null);
 
@@ -403,19 +347,18 @@ if ($action == 'update_sys_settings') {
         $stmt_suc->close();
     }
 
-    header("Location: ../../frontend/admin.php?page=ajustes&msg=Configuración+guardada+correctamente");
-    exit;
+    api_admin_finish('Configuración guardada correctamente', 'ajustes');
 }
 
 // --- CRUD: PRODUCTOS (Plan Pro) ---
 if ($action == 'add_producto') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=productos&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'productos'); }
     csrf_regenerate();
     $nombre     = trim($_POST['prod_nombre'] ?? '');
     $descripcion = trim($_POST['prod_descripcion'] ?? '');
     $precio     = floatval($_POST['prod_precio'] ?? 0);
     $stock      = intval($_POST['prod_stock'] ?? 0);
-    $uploaded   = handle_upload('prod_imagen_file', 'productos');
+    $uploaded   = admin_handle_upload('prod_imagen_file', 'productos');
     $imagen_url = $uploaded ?? (trim($_POST['prod_imagen'] ?? '') ?: null);
     $suc_id     = ($scope_id !== null) ? $scope_id : 1;
     if ($nombre) {
@@ -423,11 +366,11 @@ if ($action == 'add_producto') {
         $stmt->bind_param("ssdisi", $nombre, $descripcion, $precio, $stock, $imagen_url, $suc_id);
         $stmt->execute(); $stmt->close();
     }
-    header("Location: ../../frontend/admin.php?page=productos&msg=Producto+agregado"); exit;
+    api_admin_finish('Producto agregado', 'productos');
 }
 
 if ($action == 'edit_producto') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=productos&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'productos'); }
     csrf_regenerate();
     $id         = intval($_POST['prod_id']);
     $nombre     = trim($_POST['prod_nombre'] ?? '');
@@ -435,31 +378,31 @@ if ($action == 'edit_producto') {
     $precio     = floatval($_POST['prod_precio'] ?? 0);
     $stock      = intval($_POST['prod_stock'] ?? 0);
     $activo     = isset($_POST['prod_activo']) ? 1 : 0;
-    $uploaded   = handle_upload('prod_imagen_file', 'productos');
+    $uploaded   = admin_handle_upload('prod_imagen_file', 'productos');
     $imagen_url = $uploaded ?? (trim($_POST['prod_imagen'] ?? '') ?: null);
     $suc_id     = ($scope_id !== null) ? $scope_id : 1;
     if ($imagen_url) {
         $stmt = $conn->prepare("UPDATE productos SET nombre=?, descripcion=?, precio=?, stock=?, imagen_url=?, activo=? WHERE id=? AND sucursal_id=?");
-        $stmt->bind_param("ssdiisii", $nombre, $descripcion, $precio, $stock, $imagen_url, $activo, $id, $suc_id);
+        $stmt->bind_param("ssdisiii", $nombre, $descripcion, $precio, $stock, $imagen_url, $activo, $id, $suc_id);
     } else {
         $stmt = $conn->prepare("UPDATE productos SET nombre=?, descripcion=?, precio=?, stock=?, activo=? WHERE id=? AND sucursal_id=?");
-        $stmt->bind_param("ssdiii", $nombre, $descripcion, $precio, $stock, $activo, $id, $suc_id);
+        $stmt->bind_param("ssdiiii", $nombre, $descripcion, $precio, $stock, $activo, $id, $suc_id);
     }
     $stmt->execute(); $stmt->close();
-    header("Location: ../../frontend/admin.php?page=productos&msg=Producto+actualizado"); exit;
+    api_admin_finish('Producto actualizado', 'productos');
 }
 
 if ($action == 'delete_producto') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=productos&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'productos'); }
     csrf_regenerate();
     $id     = intval($_POST['prod_id']);
     $suc_id = ($scope_id !== null) ? $scope_id : 1;
     $stmt = $conn->prepare("DELETE FROM productos WHERE id=? AND sucursal_id=?");
     $stmt->bind_param("ii", $id, $suc_id); $stmt->execute(); $stmt->close();
-    header("Location: ../../frontend/admin.php?page=productos&msg=Producto+eliminado"); exit;
+    api_admin_finish('Producto eliminado', 'productos');
 }
 if ($action == 'aprobar_pago_pedido') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=pedidos&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'pedidos'); }
     csrf_regenerate();
     $pedido_id = intval($_POST['pedido_id'] ?? 0);
     $suc_id = ($scope_id !== null) ? $scope_id : 1;
@@ -467,11 +410,11 @@ if ($action == 'aprobar_pago_pedido') {
     $stmt->bind_param("ii", $pedido_id, $suc_id);
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/admin.php?page=pedidos&msg=Pago+aprobado"); exit;
+    api_admin_finish('Pago aprobado', 'pedidos');
 }
 
 if ($action == 'completar_pedido') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=pedidos&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'pedidos'); }
     csrf_regenerate();
     $pedido_id = intval($_POST['pedido_id'] ?? 0);
     $suc_id = ($scope_id !== null) ? $scope_id : 1;
@@ -479,11 +422,11 @@ if ($action == 'completar_pedido') {
     $stmt->bind_param("ii", $pedido_id, $suc_id);
     $stmt->execute();
     $stmt->close();
-    header("Location: ../../frontend/admin.php?page=pedidos&msg=Pedido+completado"); exit;
+    api_admin_finish('Pedido completado', 'pedidos');
 }
 
 if ($action == 'cancelar_pedido') {
-    if (!csrf_validate()) { header("Location: ../../frontend/admin.php?page=pedidos&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { api_admin_finish('Error de seguridad', 'pedidos'); }
     csrf_regenerate();
     $pedido_id = intval($_POST['pedido_id'] ?? 0);
     $suc_id = ($scope_id !== null) ? $scope_id : 1;
@@ -509,11 +452,74 @@ if ($action == 'cancelar_pedido') {
         $stmt_stk->close();
         
         $conn->commit();
-        header("Location: ../../frontend/admin.php?page=pedidos&msg=Pedido+cancelado"); exit;
+        api_admin_finish('Pedido cancelado', 'pedidos');
     } catch (\Exception $e) {
         $conn->rollback();
-        header("Location: ../../frontend/admin.php?page=pedidos&msg=Error+al+cancelar+pedido"); exit;
+        api_admin_finish('Error al cancelar pedido', 'pedidos');
     }
 }
-?>
+
+// --- VERIFICAR PAGO DE CITA ---
+if ($action === 'verificar_cita') {
+    if (!csrf_validate()) {
+        api_admin_finish('Error de seguridad', 'citas');
+    }
+    csrf_regenerate();
+
+    $id_cita = (int) ($_POST['verificar_id'] ?? 0);
+    if ($id_cita <= 0) {
+        api_admin_finish('Cita no válida', 'citas');
+    }
+
+    if ($scope_id !== null) {
+        $check = $conn->prepare('SELECT id FROM citas WHERE id = ? AND sucursal_id = ?');
+        $check->bind_param('ii', $id_cita, $scope_id);
+        $check->execute();
+        if ($check->get_result()->num_rows === 0) {
+            $check->close();
+            api_admin_finish('Acceso denegado', 'citas');
+        }
+        $check->close();
+    }
+
+    $stmt_up = $conn->prepare('UPDATE citas SET estado_pago = \'verificado\' WHERE id = ?');
+    $stmt_up->bind_param('i', $id_cita);
+    $stmt_up->execute();
+    $stmt_up->close();
+
+    $extra = [];
+    $stmt_sel = $conn->prepare('SELECT cliente_telefono, cliente_nombre, servicio, fecha, hora FROM citas WHERE id = ?');
+    $stmt_sel->bind_param('i', $id_cita);
+    $stmt_sel->execute();
+    $res_c = $stmt_sel->get_result();
+
+    $cita_info = $res_c ? $res_c->fetch_assoc() : null;
+    if ($cita_info) {
+        $tel = $cita_info['cliente_telefono'];
+        $nom = $cita_info['cliente_nombre'];
+
+        $stmt_ins = $conn->prepare(
+            'INSERT INTO clientes (telefono, nombre, puntos, ultima_visita) VALUES (?, ?, 1, CURDATE())
+             ON DUPLICATE KEY UPDATE puntos = puntos + 1, ultima_visita = CURDATE()'
+        );
+        $stmt_ins->bind_param('ss', $tel, $nom);
+        $stmt_ins->execute();
+        $stmt_ins->close();
+
+        $extra = [
+            'wa_tel' => $tel,
+            'wa_nom' => $nom,
+            'wa_svc' => $cita_info['servicio'],
+            'wa_fecha' => date('d/m/Y', strtotime($cita_info['fecha'])),
+            'wa_hora' => date('h:i A', strtotime($cita_info['hora'])),
+        ];
+    }
+    $stmt_sel->close();
+
+    api_admin_finish('Pago verificado', 'citas', $extra);
+}
+
+if (defined('ALCORTE_API_REQUEST')) {
+    api_err('Acción no reconocida', 400);
+}
 

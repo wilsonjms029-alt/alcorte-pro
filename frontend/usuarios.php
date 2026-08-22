@@ -32,6 +32,8 @@ if ($page == 'editar' && $edit_id) {
         .text-gold { color: #b49363; }
         .bg-gold { background-color: #b49363; }
     </style>
+    <meta name="alcorte-base" content="<?php echo htmlspecialchars(project_base_url()); ?>">
+    <script src="assets/api.js" defer></script>
 </head>
 <body class="font-sans antialiased">
     <div class="min-h-screen flex">
@@ -103,7 +105,7 @@ if ($page == 'editar' && $edit_id) {
                                                         <i class="fa-solid fa-pen mr-1"></i> Editar
                                                     </a>
                                                     <?php if ($u['id'] != $_SESSION['user_id']): ?>
-                                                        <form action="../backend/processing/usuarios.php" method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar este usuario?')">
+                                                        <form action="../api/v1/usuarios" method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar este usuario?')">
                                                             <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                                             <input type="hidden" name="action" value="eliminar_usuario">
                                                             <input type="hidden" name="id" value="<?php echo $u['id']; ?>">
@@ -127,7 +129,7 @@ if ($page == 'editar' && $edit_id) {
                     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-8 max-w-2xl">
                         <h2 class="text-xl font-bold text-slate-900 mb-6">Editar Usuario</h2>
 
-                        <form action="../backend/processing/usuarios.php" method="POST" class="space-y-6">
+                        <form action="../api/v1/usuarios" method="POST" class="space-y-6">
                             <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                             <input type="hidden" name="action" value="editar_usuario">
                             <input type="hidden" name="id" value="<?php echo $edit_user['id']; ?>">
@@ -200,6 +202,13 @@ if ($page == 'editar' && $edit_id) {
             </div>
         </main>
     </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.AlCorte) {
+            AlCorte.bindApiForms('form[action$="api/v1/usuarios"]', 'usuarios');
+        }
+    });
+    </script>
 </body>
 </html>
 

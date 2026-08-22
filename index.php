@@ -2,91 +2,12 @@
 // La configuración central gestiona errores, conexión y sesión.
 require_once './backend/config/config.php';
 
-header("Cache-Control: no-cache, no-store, must-revalidate");
-header("Pragma: no-cache");
-header("Expires: 0");
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
 
-$error = "";
-
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Rate limiting
-    if (!isset($_SESSION['login_attempts'])) {
-        $_SESSION['login_attempts'] = 0;
-        $_SESSION['login_last_attempt'] = 0;
-    }
-
-    if ($_SESSION['login_attempts'] >= 5 && (time() - $_SESSION['login_last_attempt']) < 900) {
-        $error = "Demasiados intentos fallidos. Espera 15 minutos antes de intentar de nuevo.";
-    } else {
-        // CSRF validation
-        if (!csrf_validate()) {
-            error_log("CSRF Mismatch: POST=" . ($_POST['csrf_token'] ?? 'NULL') . " | SESSION=" . ($_SESSION['csrf_token'] ?? 'NULL'));
-            $error = "Token de seguridad inválido. Recarga la página.";
-        } else {
-            csrf_regenerate();
-
-            $usuario = trim($_POST['usuario']);
-            $password = trim($_POST['password']);
-
-            if (!isset($conn) || $conn === null) {
-                $error = "Error: El archivo conexion.php no pudo entregar el objeto de conexión (\$conn).";
-            } else {
-                $stmt = $conn->prepare("SELECT id, usuario, password, nombre, rol, barbero_id, telefono, sucursal_id FROM usuarios WHERE usuario = ?");
-
-                if ($stmt) {
-                    $stmt->bind_param("s", $usuario);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-
-                    if ($user = $result->fetch_assoc()) {
-                        if (password_verify($password, $user['password'])) {
-                            $_SESSION['user_id'] = $user['id'];
-                            $_SESSION['nombre'] = $user['nombre'];
-                            $_SESSION['rol'] = $user['rol'];
-                            $_SESSION['barbero_id'] = $user['barbero_id'];
-                            $_SESSION['telefono'] = $user['telefono'];
-                            $_SESSION['sucursal_id'] = $user['sucursal_id'];
-
-                            // Reset rate limiting on success
-                            $_SESSION['login_attempts'] = 0;
-                            $_SESSION['login_last_attempt'] = 0;
-
-                            if ($user['rol'] == 'superadmin') { header("Location: ./frontend/superadmin.php"); exit; }
-                            if ($user['rol'] == 'admin') { header("Location: ./frontend/admin.php"); exit; }
-                            if ($user['rol'] == 'gerente') { header("Location: ./frontend/admin.php"); exit; }
-                            if ($user['rol'] == 'barbero') {
-                                $suc_id = intval($user['sucursal_id'] ?? 0);
-                                $plan_activo = get_plan_sucursal($conn, $suc_id);
-                                $is_basic_plan = $plan_activo ? ($plan_activo['nombre'] === 'Básico') : false;
-                                if ($is_basic_plan) {
-                                    session_destroy();
-                                    $error = "El plan básico no incluye acceso al panel de barbero.";
-                                } else {
-                                    header("Location: ./frontend/barbero.php");
-                                    exit;
-                                }
-                            }
-                            if ($user['rol'] == 'cliente') { header("Location: ./frontend/cliente.php"); exit; }
-                        } else {
-                            $_SESSION['login_attempts']++;
-                            $_SESSION['login_last_attempt'] = time();
-                            $error = "Usuario o contraseña incorrectos.";
-                        }
-                    } else {
-                        $_SESSION['login_attempts']++;
-                        $_SESSION['login_last_attempt'] = time();
-                        $error = "Usuario o contraseña incorrectos.";
-                    }
-                    $stmt->close();
-                } else {
-                    $error = "Error al preparar la consulta en la base de datos: " . $conn->error;
-                }
-            }
-        }
-    }
-} else {
-    csrf_generate();
-}
+$error = '';
+csrf_generate();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -448,6 +369,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
     </style>
+    <meta name="alcorte-base" content="<?php echo htmlspecialchars(project_base_url()); ?>">
+    <script src="frontend/assets/api.js" defer></script>
 </head>
 <body>
     <div class="login-container">
@@ -481,8 +404,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </div>
                 <?php endif; ?>
 
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                <form method="POST" id="loginForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
 
                     <div class="form-group">
                         <label class="form-label">Usuario</label>
@@ -503,7 +426,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         </div>
                     </div>
 
-                    <button type="submit" class="form-submit">
+                    <button type="submit" class="form-submit" id="loginSubmit">
                         <i class="fas fa-arrow-right-to-bracket" style="margin-right: 8px;"></i>
                         Ingresar al Sistema
                     </button>
@@ -524,6 +447,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 icon.classList.replace('fa-eye-slash', 'fa-eye');
             }
         }
+
+        document.getElementById('loginForm')?.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var btn = document.getElementById('loginSubmit');
+            if (btn) btn.disabled = true;
+            var fd = new FormData(this);
+            if (window.AlCorte) {
+                AlCorte.postJson('auth/login', {
+                    csrf_token: fd.get('csrf_token'),
+                    usuario: fd.get('usuario'),
+                    password: fd.get('password'),
+                }).then(function (data) {
+                    window.location.href = data.data.redirect || './frontend/admin.php';
+                }).catch(function (err) {
+                    alert(err.message || 'Error al iniciar sesión');
+                    if (btn) btn.disabled = false;
+                });
+            }
+        });
 
         // Animación sutil en el foco de los inputs
         document.querySelectorAll('.form-input').forEach(input => {

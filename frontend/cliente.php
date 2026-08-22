@@ -74,189 +74,6 @@ $res_conf->execute();
 $res_conf = $res_conf->get_result();
 if ($res_conf) while ($row = $res_conf->fetch_assoc()) $config[$row['clave']] = $row['valor'];
 
-// ── PROCESS BOOKING ──
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'agendar') {
-    if (!csrf_validate()) {
-        $msg = 'Token de seguridad inválido. Recarga la página e intenta de nuevo.';
-        $msg_type = 'error';
-    } else {
-    csrf_regenerate();
-    $nombre     = trim($_POST['cliente_nombre']   ?? '');
-    $telefono   = trim($_POST['cliente_telefono'] ?? '');
-    $barbero    = intval($_POST['barbero_id']     ?? 0);
-    $servicio   = trim($_POST['servicio']         ?? '');
-    $fecha      = trim($_POST['fecha']            ?? '');
-    $hora       = trim($_POST['hora']             ?? '');
-    $metodo     = trim($_POST['metodo_pago']      ?? '');
-    $referencia = trim($_POST['referencia_pago']  ?? '');
-    $tel_digitos = preg_replace('/\D/', '', $telefono);
-
-    $error_val = null;
-    if (!$nombre || !$telefono || !$fecha || !$hora || !$metodo || !$servicio || !$barbero) {
-        $error_val = "Por favor, completa todos los campos requeridos.";
-    } elseif (strlen($tel_digitos) < 7 || strlen($tel_digitos) > 15) {
-        $error_val = "El número de teléfono no parece válido.";
-    } elseif (!in_array($servicio, $servicios_validos)) {
-        $error_val = "El servicio seleccionado no es válido.";
-    } elseif (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || $fecha < date('Y-m-d')) {
-        $error_val = "La fecha no puede ser anterior a hoy.";
-    } else {
-        $stmt_b = $conn->prepare("SELECT nombre, hora_inicio, hora_fin, almuerzo_inicio, almuerzo_fin, sucursal_id FROM barberos WHERE id = ? AND activo = 1");
-        $stmt_b->bind_param("i", $barbero);
-        $stmt_b->execute();
-        $bdata = $stmt_b->get_result()->fetch_assoc();
-        $stmt_b->close();
-
-        if (!$bdata) {
-            $error_val = "El especialista seleccionado no está disponible.";
-        } elseif ((int) ($bdata['sucursal_id'] ?? 0) !== (int) $sucursal_id) {
-            $error_val = "El especialista no pertenece a esta tienda.";
-        } else {
-            $t    = strtotime($hora);
-            $ini  = strtotime($bdata['hora_inicio']);
-            $fin  = strtotime($bdata['hora_fin']);
-            $almi = strtotime($bdata['almuerzo_inicio']);
-            $almf = strtotime($bdata['almuerzo_fin']);
-            $hoy  = date('Y-m-d');
-
-            if ($t === false || $t < $ini || $t >= $fin) {
-                $error_val = "Ese horario está fuera del turno de " . htmlspecialchars($bdata['nombre']) . " (" . date('h:i A', $ini) . " – " . date('h:i A', $fin) . ").";
-            } elseif ($t >= $almi && $t < $almf) {
-                $error_val = htmlspecialchars($bdata['nombre']) . " está en almuerzo a esa hora. Elige otro horario.";
-            } elseif ($fecha === $hoy && $t < strtotime(date('H:i'))) {
-                $error_val = "Esa hora ya pasó. Elige un horario futuro.";
-            } else {
-                $stmt_chk = $conn->prepare("SELECT id FROM citas WHERE barbero_id = ? AND fecha = ? AND hora = ? AND estado != 'cancelada'");
-                $stmt_chk->bind_param("iss", $barbero, $fecha, $hora);
-                $stmt_chk->execute();
-                if ($stmt_chk->get_result()->num_rows > 0) {
-                    $error_val = "Ese cupo ya fue reservado. Por favor elige otra hora.";
-                }
-                $stmt_chk->close();
-            }
-        }
-    }
-
-    if ($error_val !== null) {
-        $msg = $error_val;
-        $msg_type = "error";
-    } else {
-        $estado_pago = ($metodo === 'Efectivo') ? 'verificado' : 'pendiente';
-        $suc_cita    = intval($bdata['sucursal_id'] ?? 1) ?: 1;
-        $stmt = $conn->prepare(
-            "INSERT INTO citas (barbero_id, cliente_nombre, cliente_telefono, servicio, fecha, hora, metodo_pago, referencia_pago, estado_pago, sucursal_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        );
-        $stmt->bind_param("issssssssi", $barbero, $nombre, $tel_digitos, $servicio, $fecha, $hora, $metodo, $referencia, $estado_pago, $suc_cita);
-        if ($stmt->execute()) {
-            $fecha_fmt = date('d/m/Y', strtotime($fecha));
-            $hora_fmt  = date('h:i A', strtotime($hora));
-            $msg = "¡Turno solicitado! Te esperamos el {$fecha_fmt} a las {$hora_fmt}.";
-            $msg_type = "success";
-            $_POST = [];
-        } else {
-            $msg = "Ese cupo ya fue reservado. Por favor elige otra hora.";
-            $msg_type = "error";
-        }
-        $stmt->close();
-    }
-    }
-}
-
-// ── PROCESS PRODUCT ORDER ──
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'crear_pedido' && $has_productos) {
-    if (!csrf_validate()) {
-        $msg = 'Token de seguridad inválido. Recarga la página e intenta de nuevo.';
-        $msg_type = 'error';
-    } else {
-    csrf_regenerate();
-        $nombre     = trim($_POST['cliente_nombre']   ?? '');
-        $telefono   = trim($_POST['cliente_telefono'] ?? '');
-        $metodo     = trim($_POST['metodo_pago']      ?? '');
-        $referencia = trim($_POST['referencia_pago']  ?? '');
-        $cart_json  = trim($_POST['cart_items']       ?? '');
-        $tel_digitos = preg_replace('/\D/', '', $telefono);
-
-        $cart_items = json_decode($cart_json, true);
-
-        if (!$nombre || !$telefono || !$metodo || empty($cart_items)) {
-            $msg = "Por favor, completa todos los campos del pedido.";
-            $msg_type = "error";
-        } elseif (strlen($tel_digitos) < 7 || strlen($tel_digitos) > 15) {
-            $msg = "El número de teléfono no parece válido.";
-            $msg_type = "error";
-        } else {
-            $total = 0;
-            $items_to_save = [];
-            $stock_ok = true;
-
-            foreach ($cart_items as $item) {
-                $pid = intval($item['id'] ?? 0);
-                $qty = intval($item['qty'] ?? 0);
-
-                if ($qty <= 0) continue;
-
-                $stmt_p = $conn->prepare("SELECT nombre, precio, stock FROM productos WHERE id = ? AND sucursal_id = ? AND activo = 1");
-                $stmt_p->bind_param("ii", $pid, $sucursal_id);
-                $stmt_p->execute();
-                $pdata = $stmt_p->get_result()->fetch_assoc();
-                $stmt_p->close();
-
-                if (!$pdata || $pdata['stock'] < $qty) {
-                    $stock_ok = false;
-                    $msg = "Uno o más productos no cuentan con stock suficiente (" . htmlspecialchars($pdata['nombre'] ?? 'Producto') . ").";
-                    $msg_type = "error";
-                    break;
-                }
-
-                $precio_uni = floatval($pdata['precio']);
-                $total += $precio_uni * $qty;
-                $items_to_save[] = [
-                    'id' => $pid,
-                    'nombre' => $pdata['nombre'],
-                    'qty' => $qty,
-                    'precio' => $precio_uni
-                ];
-            }
-
-            if ($stock_ok && count($items_to_save) > 0) {
-                $estado_pago = ($metodo === 'Efectivo') ? 'verificado' : 'pendiente';
-                
-                $conn->begin_transaction();
-                try {
-                    $stmt_ped = $conn->prepare("INSERT INTO pedidos (sucursal_id, cliente_nombre, cliente_telefono, metodo_pago, referencia_pago, estado_pago, total) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    $stmt_ped->bind_param("isssssd", $sucursal_id, $nombre, $tel_digitos, $metodo, $referencia, $estado_pago, $total);
-                    $stmt_ped->execute();
-                    $pedido_id = $stmt_ped->insert_id;
-                    $stmt_ped->close();
-
-                    $stmt_det = $conn->prepare("INSERT INTO pedido_detalles (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario) VALUES (?, ?, ?, ?, ?)");
-                    $stmt_stk = $conn->prepare("UPDATE productos SET stock = stock - ? WHERE id = ?");
-
-                    foreach ($items_to_save as $it) {
-                        $stmt_det->bind_param("iisid", $pedido_id, $it['id'], $it['nombre'], $it['qty'], $it['precio']);
-                        $stmt_det->execute();
-
-                        $stmt_stk->bind_param("ii", $it['qty'], $it['id']);
-                        $stmt_stk->execute();
-                    }
-                    $stmt_det->close();
-                    $stmt_stk->close();
-
-                    $conn->commit();
-                    $msg = "¡Tu pedido ha sido registrado con éxito! Total a pagar: $" . number_format($total, 2);
-                    $msg_type = "success";
-                    echo "<script>document.addEventListener('DOMContentLoaded', function() { localStorage.removeItem('alcorte_cart_" . $sucursal_id . "'); if(window.renderCart) renderCart(); });</script>";
-                } catch (\Exception $e) {
-                    $conn->rollback();
-                    $msg = "Ocurrió un error al procesar el pedido. Intenta de nuevo.";
-                    $msg_type = "error";
-                }
-            }
-        }
-    }
-}
-
 // ── LOAD BARBERS ──
 $barberos = [];
 $res_b = $conn->prepare("SELECT id, nombre, foto_url FROM barberos WHERE activo = 1 AND sucursal_id = ? ORDER BY nombre");
@@ -918,6 +735,8 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
             display: none;
         }
     </style>
+    <meta name="alcorte-base" content="<?php echo htmlspecialchars(project_base_url()); ?>">
+    <script src="assets/api.js" defer></script>
 </head>
 <body>
 <div class="page-card">
@@ -1292,9 +1111,9 @@ function selSpec(card, id, nom) {
 
 function fetchBloqueos() {
     if (!ST.bid || !ST.fecha) { bloqueos_cache = []; return; }
-    fetch(`../backend/api/bloqueos.php?barbero_id=${ST.bid}&fecha=${ST.fecha}&t=${encodeURIComponent(STORE_TOKEN)}`)
+    fetch(`../api/v1/bloqueos?barbero_id=${ST.bid}&fecha=${ST.fecha}&t=${encodeURIComponent(STORE_TOKEN)}`)
         .then(r => r.json())
-        .then(data => { bloqueos_cache = data.bloqueos || []; renderTimeGroups(); })
+        .then(data => { bloqueos_cache = (data.data && data.data.bloqueos) || data.bloqueos || []; renderTimeGroups(); })
         .catch(() => { bloqueos_cache = []; });
 }
 
@@ -1366,7 +1185,16 @@ function doSubmit() {
     if (!ST.bid)   { alert('Por favor selecciona un especialista.'); return; }
     const form = document.getElementById('formReserva');
     if (!form.reportValidity()) return;
-    form.submit();
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+    payload.t = STORE_TOKEN;
+    if (!window.AlCorte) { form.submit(); return; }
+    AlCorte.postJson('public/agendar', payload)
+        .then(function (data) {
+            alert(data.message || 'Reserva registrada');
+            window.location.href = window.location.pathname + '?t=' + encodeURIComponent(STORE_TOKEN) + '&tab=reservar';
+        })
+        .catch(function (err) { alert(err.message || 'Error al reservar'); });
 }
 
 // ── UTILS ──
@@ -1513,6 +1341,7 @@ renderWeek();
 
 <script>
 const SUC_ID = <?= $sucursal_id ?>;
+const STORE_TOKEN = <?= json_encode($token) ?>;
 const CART_KEY = 'alcorte_cart_' + SUC_ID;
 
 // Payment instructions configs
@@ -1633,13 +1462,29 @@ function showPedidoPaymentDetails(val) {
 }
 
 function submitPedido(e) {
+    e.preventDefault();
     if (cart.length === 0) {
         alert('El carrito está vacío.');
-        e.preventDefault();
         return false;
     }
-    document.getElementById('checkout-cart-items').value = JSON.stringify(cart);
-    return true;
+    const form = document.getElementById('formCheckoutPedido');
+    const fd = new FormData(form);
+    fd.set('cart_items', JSON.stringify(cart));
+    fd.set('action', 'crear_pedido');
+    fd.set('t', STORE_TOKEN);
+    if (!window.AlCorte) return true;
+    AlCorte.postForm('public/pedido', fd)
+        .then(function (data) {
+            alert(data.message || 'Pedido registrado');
+            if (data.data && data.data.clear_cart) {
+                localStorage.removeItem('alcorte_cart_' + SUC_ID);
+                cart = [];
+                updateCartUI();
+            }
+            toggleCartModal(false);
+        })
+        .catch(function (err) { alert(err.message || 'Error al procesar el pedido'); });
+    return false;
 }
 
 window.renderCart = updateCartUI;
@@ -1704,7 +1549,7 @@ function buscarCitas() {
     btn.innerHTML = '<span class="spinner"></span> Buscando...';
     btn.disabled = true;
 
-    fetch(`../backend/api/mis_citas.php?telefono=${encodeURIComponent(tel)}&t=${encodeURIComponent(STORE_TOKEN)}`)
+    fetch(`../api/v1/mis_citas?telefono=${encodeURIComponent(tel)}&t=${encodeURIComponent(STORE_TOKEN)}`)
         .then(r => r.text())
         .then(text => {
             let data;
@@ -1718,8 +1563,9 @@ function buscarCitas() {
             btn.innerHTML = '<i class="fas fa-search"></i> Buscar mis citas';
             btn.disabled = false;
 
-            const hasCitas = data.citas && Array.isArray(data.citas) && data.citas.length > 0;
-            const hasPedidos = data.pedidos && Array.isArray(data.pedidos) && data.pedidos.length > 0;
+            const payload = data.data || data;
+            const hasCitas = payload.citas && Array.isArray(payload.citas) && payload.citas.length > 0;
+            const hasPedidos = payload.pedidos && Array.isArray(payload.pedidos) && payload.pedidos.length > 0;
 
             if (!hasCitas && !hasPedidos) {
                 box.innerHTML = `
@@ -1739,7 +1585,7 @@ function buscarCitas() {
             if (hasCitas) {
                 const hoy = getVETime(); hoy.setHours(0,0,0,0);
                 const prox = [], pasadas = [];
-                data.citas.forEach(c => {
+                payload.citas.forEach(c => {
                     const [cy, cm, cd] = c.fecha.split('-').map(Number);
                     const fc = new Date(cy, cm - 1, cd, 0, 0, 0);
                     if (fc >= hoy && c.estado !== 'cancelada' && c.estado !== 'completada') prox.push(c);
@@ -1768,7 +1614,7 @@ function buscarCitas() {
                 html += `<div class="simple-card" style="margin-top:14px;">
                     <div class="simple-card-head"><i class="fas fa-shopping-bag" style="color:var(--gold)"></i> Mis Pedidos / Compras</div>
                     <div class="simple-card-body" style="padding:12px">`;
-                data.pedidos.forEach(p => { html += pedidoCard(p); });
+                payload.pedidos.forEach(p => { html += pedidoCard(p); });
                 html += `</div></div>`;
             }
 
@@ -1856,7 +1702,7 @@ function citaCard(c) {
 function cancelarCita(citaId) {
     if (!confirm('¿Seguro que deseas cancelar esta cita?')) return;
     const tel = document.getElementById('citasPhone').value.trim().replace(/\D/g,'');
-    fetch('../backend/api/cancelar_cita.php', {
+    fetch('../api/v1/cancelar_cita', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ cita_id: citaId, telefono: tel, t: STORE_TOKEN })

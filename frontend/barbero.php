@@ -46,32 +46,7 @@ if ($is_basic_plan && !$is_admin_viewing) {
 $can_manage_citas = $is_admin_viewing;
 
 // Marcar cita como completada / cancelada (solo citas propias y si tiene permiso)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cita_id'], $_POST['nuevo_estado'])) {
-    if (!$can_manage_citas) {
-        header("Location: barbero.php?msg=Acción+no+permitida");
-        exit;
-    }
-    if (!csrf_validate()) {
-        header("Location: barbero.php?msg=Error+de+seguridad");
-        exit;
-    }
-    csrf_regenerate();
-
-    $cita_id      = intval($_POST['cita_id']);
-    $nuevo_estado = $_POST['nuevo_estado'];
-
-    if (in_array($nuevo_estado, ['completada', 'cancelada'], true)) {
-        $up = $conn->prepare("UPDATE citas SET estado = ? WHERE id = ? AND barbero_id = ?");
-        $up->bind_param("sii", $nuevo_estado, $cita_id, $id_barbero);
-        $up->execute();
-        $up->close();
-        $txt = $nuevo_estado === 'completada' ? 'Cita+marcada+como+completada' : 'Cita+cancelada';
-        header("Location: barbero.php?msg=$txt");
-        exit;
-    }
-    header("Location: barbero.php");
-    exit;
-}
+$can_manage_citas = $is_admin_viewing;
 
 $page = $_GET['page'] ?? 'agenda';
 
@@ -589,6 +564,8 @@ $stmt_kpi->close();
             }
         }
     </style>
+    <meta name="alcorte-base" content="<?php echo htmlspecialchars(project_base_url()); ?>">
+    <script src="assets/api.js" defer></script>
 </head>
 <body>
     <?php if ($is_admin_viewing): ?>
@@ -746,14 +723,16 @@ $stmt_kpi->close();
 
                                             <?php if ($est === 'programada' && $can_manage_citas): ?>
                                             <div class="cita-actions">
-                                                <form method="POST" style="flex:1">
+                                                <form method="POST" action="../api/v1/barbero" style="flex:1">
                                                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                                    <input type="hidden" name="action" value="update_estado">
                                                     <input type="hidden" name="cita_id" value="<?php echo $row['id']; ?>">
                                                     <input type="hidden" name="nuevo_estado" value="completada">
                                                     <button type="submit" class="act-btn act-done"><i class="fas fa-check"></i> Completar</button>
                                                 </form>
-                                                <form method="POST" style="flex:1" onsubmit="return confirm('¿Cancelar esta cita?')">
+                                                <form method="POST" action="../api/v1/barbero" style="flex:1" onsubmit="return confirm('¿Cancelar esta cita?')">
                                                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                                    <input type="hidden" name="action" value="update_estado">
                                                     <input type="hidden" name="cita_id" value="<?php echo $row['id']; ?>">
                                                     <input type="hidden" name="nuevo_estado" value="cancelada">
                                                     <button type="submit" class="act-btn act-cancel"><i class="fas fa-xmark"></i> Cancelar</button>
@@ -858,6 +837,11 @@ $stmt_kpi->close();
                 if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
                     sidebar.classList.remove('open');
                 }
+            }
+        });
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.AlCorte) {
+                AlCorte.bindApiForms('form[action$="api/v1/barbero"]', '');
             }
         });
     </script>

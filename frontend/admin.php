@@ -54,72 +54,6 @@ if ($is_basic_plan && $is_scoped && $scope_id) {
     if ($page === 'personal') $page = 'mi_perfil';
 }
 
-// PROCESAR APROBACIÓN DE PAGO SEGURA (PREPARED STATEMENTS)
-if (isset($_POST['verificar_id'])) {
-    if (!csrf_validate()) {
-        header("Cache-Control: no-cache, no-store, must-revalidate");
-        header("Pragma: no-cache");
-        header("Expires: 0");
-        header("Location: admin.php?page=citas&msg=Error+de+seguridad");
-        exit;
-    }
-    csrf_regenerate();
-
-    $id_cita = intval($_POST['verificar_id']);
-
-    if ($is_scoped) {
-        $check = $conn->prepare("SELECT id FROM citas WHERE id = ? AND sucursal_id = ?");
-        $check->bind_param("ii", $id_cita, $scope_id);
-        $check->execute();
-        if ($check->get_result()->num_rows === 0) {
-            header("Cache-Control: no-cache, no-store, must-revalidate");
-            header("Pragma: no-cache");
-            header("Expires: 0");
-            header("Location: admin.php?page=citas&msg=Acceso+denegado");
-            exit;
-        }
-        $check->close();
-    }
-
-    // 1. Actualizar estado de la cita
-    $stmt_up = $conn->prepare("UPDATE citas SET estado_pago = 'verificado' WHERE id = ?");
-    $stmt_up->bind_param("i", $id_cita);
-    $stmt_up->execute();
-    $stmt_up->close();
-
-    // 2. Obtener datos del cliente
-    $stmt_sel = $conn->prepare("SELECT cliente_telefono, cliente_nombre, servicio, fecha, hora FROM citas WHERE id = ?");
-    $stmt_sel->bind_param("i", $id_cita);
-    $stmt_sel->execute();
-    $res_c = $stmt_sel->get_result();
-
-    $wa_redirect = '';
-    if ($res_c && $cita_info = $res_c->fetch_assoc()) {
-        $tel = $cita_info['cliente_telefono'];
-        $nom = $cita_info['cliente_nombre'];
-
-        // 3. Insertar o actualizar puntos
-        $stmt_ins = $conn->prepare("INSERT INTO clientes (telefono, nombre, puntos, ultima_visita) VALUES (?, ?, 1, CURDATE()) ON DUPLICATE KEY UPDATE puntos = puntos + 1, ultima_visita = CURDATE()");
-        $stmt_ins->bind_param("ss", $tel, $nom);
-        $stmt_ins->execute();
-        $stmt_ins->close();
-
-        // 4. Preparar datos para notificación WhatsApp
-        $wa_redirect = '&wa_tel=' . urlencode($tel)
-            . '&wa_nom=' . urlencode($nom)
-            . '&wa_svc=' . urlencode($cita_info['servicio'])
-            . '&wa_fecha=' . urlencode(date('d/m/Y', strtotime($cita_info['fecha'])))
-            . '&wa_hora=' . urlencode(date('h:i A', strtotime($cita_info['hora'])));
-    }
-    $stmt_sel->close();
-
-    header("Cache-Control: no-cache, no-store, must-revalidate");
-    header("Pragma: no-cache");
-    header("Expires: 0");
-    header("Location: admin.php?page=citas&msg=Pago+verificado" . $wa_redirect);
-    exit;
-}
-
 // ESTADÍSTICAS OPERATIVAS (KPIS)
 if ($is_scoped) {
     $hoy_citas = $conn->prepare("SELECT COUNT(*) as total FROM citas WHERE fecha = CURDATE() AND sucursal_id = ?");
@@ -696,6 +630,8 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
             }
         }
     </style>
+    <meta name="alcorte-base" content="<?php echo htmlspecialchars(project_base_url()); ?>">
+    <script src="assets/api.js" defer></script>
 </head>
 <body>
     <div class="admin-container">
@@ -1081,8 +1017,9 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                             <td>
                                                 <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
                                                 <?php if ($row['estado_pago'] == 'pendiente'): ?>
-                                                    <form action="admin.php?page=citas" method="POST" style="display: inline;">
+                                                    <form action="../api/v1/admin" method="POST" style="display: inline;">
                                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                                        <input type="hidden" name="action" value="verificar_cita">
                                                         <input type="hidden" name="verificar_id" value="<?php echo $row['id']; ?>">
                                                         <button type="submit" class="btn btn-primary">Aprobar</button>
                                                     </form>
@@ -1152,8 +1089,9 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                      </div>
                                      <div style="padding:6px 10px; background:#f8fafc; border-top:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; gap:6px;">
                                          <?php if ($row['estado_pago'] == 'pendiente'): ?>
-                                             <form action="admin.php?page=citas" method="POST" style="margin:0;">
+                                             <form action="../api/v1/admin" method="POST" style="margin:0;">
                                                  <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                                 <input type="hidden" name="action" value="verificar_cita">
                                                  <input type="hidden" name="verificar_id" value="<?php echo $row['id']; ?>">
                                                  <button type="submit" class="btn btn-primary" style="padding:3px 8px; font-size:9px; background:#b49363; border:none; color:white; border-radius:4px; font-weight:600; cursor:pointer;">Aprobar</button>
                                              </form>
@@ -1407,7 +1345,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                         </div>
                         <div class="card">
                             <div class="card-content" style="padding:24px">
-                                <form action="../backend/processing/admin.php" method="POST" enctype="multipart/form-data">
+                                <form action="../api/v1/admin" method="POST" enctype="multipart/form-data">
                                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                     <input type="hidden" name="action" value="edit_barbero">
                                     <input type="hidden" name="id" value="<?php echo $mi_b['id']; ?>">
@@ -1478,7 +1416,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                 <h3 id="modalBarberoTitle" style="font-size:15px;font-weight:800;color:#0f172a">Registrar Barbero</h3>
                                 <button onclick="cerrarModal()" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;line-height:1;padding:4px"><i class="fas fa-times"></i></button>
                             </div>
-                            <form action="../backend/processing/admin.php" method="POST" enctype="multipart/form-data">
+                            <form action="../api/v1/admin" method="POST" enctype="multipart/form-data">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" id="barb_action" name="action" value="add_barbero">
                                 <input type="hidden" id="barb_id" name="id" value="">
@@ -1608,7 +1546,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                         <a href="barbero.php?id=<?php echo $b['id']; ?>" target="_blank" title="Ver Agenda" style="padding:6px;background:#eef2ff;border:none;border-radius:.375rem;font-size:10px;font-weight:700;cursor:pointer;color:#4f46e5;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;"><i class="fas fa-eye"></i></a>
                                     <?php endif; ?>
                                     <button onclick="editarBarbero(<?php echo $b['id']; ?>,'<?php echo htmlspecialchars($b['nombre'],ENT_QUOTES); ?>','<?php echo $b['hora_inicio']; ?>','<?php echo $b['hora_fin']; ?>','<?php echo $b['almuerzo_inicio']; ?>','<?php echo $b['almuerzo_fin']; ?>',<?php echo $b['activo']; ?>)" title="Editar" style="flex:1;padding:6px;background:#f1f5f9;border:none;border-radius:.375rem;font-size:10px;font-weight:700;cursor:pointer;color:#475569;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;"><i class="fas fa-pen"></i><span style="font-size:9px">Editar</span></button>
-                                    <form action="../backend/processing/admin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar?')">
+                                    <form action="../api/v1/admin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar?')">
                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                         <input type="hidden" name="action" value="delete_barbero">
                                         <input type="hidden" name="id" value="<?php echo $b['id']; ?>">
@@ -1640,7 +1578,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                             <h3><i class="fas fa-ban" style="color:#ef4444;margin-right:6px"></i>Bloqueos de Horario</h3>
                         </div>
                         <div style="padding:20px">
-                            <form action="../backend/processing/admin.php" method="POST" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;padding:16px;background:#f8fafc;border-radius:.75rem;border:1px solid #e2e8f0">
+                            <form action="../api/v1/admin" method="POST" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;padding:16px;background:#f8fafc;border-radius:.75rem;border:1px solid #e2e8f0">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" name="action" value="add_bloqueo">
                                 <div style="flex:1;min-width:120px">
@@ -1697,7 +1635,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                             <?php if ($blq['motivo']): ?> · <?= htmlspecialchars($blq['motivo']) ?><?php endif; ?>
                                         </div>
                                     </div>
-                                    <form action="../backend/processing/admin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este bloqueo?')">
+                                    <form action="../api/v1/admin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este bloqueo?')">
                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                         <input type="hidden" name="action" value="delete_bloqueo">
                                         <input type="hidden" name="bloqueo_id" value="<?= $blq['id'] ?>">
@@ -1800,7 +1738,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                 <h3 id="modalSvcTitle" style="font-size:15px;font-weight:800;color:#0f172a">Agregar Servicio</h3>
                                 <button onclick="cerrarModalSvc()" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;line-height:1;padding:4px"><i class="fas fa-times"></i></button>
                             </div>
-                            <form action="../backend/processing/admin.php" method="POST" id="svcForm" enctype="multipart/form-data">
+                            <form action="../api/v1/admin" method="POST" id="svcForm" enctype="multipart/form-data">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" id="svc_action" name="action" value="add_servicio">
                                 <input type="hidden" id="svc_id" name="svc_id" value="">
@@ -1901,7 +1839,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                 <!-- acciones -->
                                 <div style="padding:0 10px 10px;display:flex;gap:4px">
                                     <button onclick="editSvc(<?php echo $sv['id']; ?>,'<?php echo htmlspecialchars($sv['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($sv['precio'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($sv['duracion'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($sv['icono'],ENT_QUOTES); ?>',<?php echo $sv['activo']; ?>,<?php echo $sv['orden']; ?>,'<?php echo htmlspecialchars($sv['imagen_url']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($sv['descripcion']??'',ENT_QUOTES); ?>')" style="flex:1;padding:5px;background:#f1f5f9;border:none;border-radius:.4rem;font-size:10px;font-weight:700;cursor:pointer;color:#475569"><i class="fas fa-pen" style="margin-right:4px"></i>Editar</button>
-                                    <form action="../backend/processing/admin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este servicio?')">
+                                    <form action="../api/v1/admin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este servicio?')">
                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                         <input type="hidden" name="action" value="delete_servicio">
                                         <input type="hidden" name="svc_id" value="<?php echo $sv['id']; ?>">
@@ -2001,7 +1939,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                 <h3 id="modalProdTitle" style="font-size:15px;font-weight:800;color:#0f172a">Agregar Producto</h3>
                                 <button onclick="cerrarModalProd()" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;padding:4px"><i class="fas fa-times"></i></button>
                             </div>
-                            <form action="../backend/processing/admin.php" method="POST" id="prodForm" enctype="multipart/form-data">
+                            <form action="../api/v1/admin" method="POST" id="prodForm" enctype="multipart/form-data">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" id="prod_action" name="action" value="add_producto">
                                 <input type="hidden" id="prod_id" name="prod_id" value="">
@@ -2092,7 +2030,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                 </div>
                                 <div style="padding:0 14px 12px;display:flex;gap:6px">
                                     <button onclick="editProd(<?php echo htmlspecialchars(json_encode($pr),ENT_QUOTES); ?>)" style="flex:1;padding:6px;background:#f1f5f9;border:none;border-radius:.5rem;font-size:11px;font-weight:700;cursor:pointer;color:#475569"><i class="fas fa-pen" style="margin-right:4px"></i>Editar</button>
-                                    <form action="../backend/processing/admin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar producto?')">
+                                    <form action="../api/v1/admin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar producto?')">
                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                         <input type="hidden" name="action" value="delete_producto">
                                         <input type="hidden" name="prod_id" value="<?php echo $pr['id']; ?>">
@@ -2244,7 +2182,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                             <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
                                             <?php if ($ped['estado'] === 'pendiente'): ?>
                                                 <?php if ($ped['estado_pago'] === 'pendiente'): ?>
-                                                    <form action="../backend/processing/admin.php" method="POST" style="display: inline;">
+                                                    <form action="../api/v1/admin" method="POST" style="display: inline;">
                                                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                                         <input type="hidden" name="action" value="aprobar_pago_pedido">
                                                         <input type="hidden" name="pedido_id" value="<?php echo $ped['id']; ?>">
@@ -2252,14 +2190,14 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                                     </form>
                                                 <?php endif; ?>
                                                 
-                                                <form action="../backend/processing/admin.php" method="POST" style="display: inline;">
+                                                <form action="../api/v1/admin" method="POST" style="display: inline;">
                                                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                                     <input type="hidden" name="action" value="completar_pedido">
                                                     <input type="hidden" name="pedido_id" value="<?php echo $ped['id']; ?>">
                                                     <button type="submit" class="btn btn-primary" style="padding:4px 8px; font-size:10px; background:#10b981; border:none; color:white;">Completar</button>
                                                 </form>
 
-                                                <form action="../backend/processing/admin.php" method="POST" style="display: inline;" onsubmit="return confirm('¿Cancelar este pedido y devolver stock?')">
+                                                <form action="../api/v1/admin" method="POST" style="display: inline;" onsubmit="return confirm('¿Cancelar este pedido y devolver stock?')">
                                                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                                     <input type="hidden" name="action" value="cancelar_pedido">
                                                     <input type="hidden" name="pedido_id" value="<?php echo $ped['id']; ?>">
@@ -2312,7 +2250,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                     <div class="card">
                         <div class="card-header">Configuración General del Negocio</div>
                         <div style="padding: 20px;">
-                            <form action="../backend/processing/admin.php" method="POST" enctype="multipart/form-data">
+                            <form action="../api/v1/admin" method="POST" enctype="multipart/form-data">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" name="action" value="update_sys_settings">
 
@@ -2633,6 +2571,9 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
         document.addEventListener('DOMContentLoaded', function() {
             const savedView = localStorage.getItem('admin_citas_view') || 'list';
             setAppointmentsView(savedView);
+            if (window.AlCorte) {
+                AlCorte.bindApiForms('form[action$="api/v1/admin"]', 'admin');
+            }
         });
 
         document.getElementById('sidebar-toggle')?.addEventListener('click', function() {

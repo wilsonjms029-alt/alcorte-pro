@@ -273,6 +273,8 @@ $plan_colors = [
         }
         .shops-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
     </style>
+    <meta name="alcorte-base" content="<?php echo htmlspecialchars(project_base_url()); ?>">
+    <script src="assets/api.js" defer></script>
 </head>
 <body>
 <div class="layout">
@@ -527,7 +529,7 @@ $plan_colors = [
             <div class="card" style="margin-bottom:0">
                 <div class="card-header" id="suc-form-title"><h3>Registrar Tienda</h3></div>
                 <div class="card-body">
-                    <form action="../backend/processing/superadmin.php" method="POST">
+                    <form action="../api/v1/superadmin" method="POST">
                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                         <input type="hidden" id="shop_action" name="action" value="add_sucursal">
                         <input type="hidden" id="shop_id" name="id" value="">
@@ -616,7 +618,7 @@ $plan_colors = [
                         <!-- Acciones rápidas -->
                         <div style="display:flex;gap:5px;flex-shrink:0">
                             <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>')" class="btn btn-ghost btn-sm" title="Editar tienda"><i class="fas fa-pen"></i></button>
-                            <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda y toda su data?')">
+                            <form action="../api/v1/superadmin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda y toda su data?')">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" name="action" value="delete_sucursal">
                                 <input type="hidden" name="id" value="<?php echo $s['id']; ?>">
@@ -712,7 +714,7 @@ $plan_colors = [
                             <i class="fas fa-<?php echo $adm?'user-pen':'user-plus'; ?>"></i> <?php echo $adm?'Editar admin':'Asignar admin'; ?>
                         </button>
                         <?php if ($adm): ?>
-                        <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Quitar el admin?')">
+                        <form action="../api/v1/superadmin" method="POST" style="display:inline" onsubmit="return confirm('¿Quitar el admin?')">
                             <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                             <input type="hidden" name="action" value="delete_admin">
                             <input type="hidden" name="adm_id" value="<?php echo $adm['id']; ?>">
@@ -746,7 +748,7 @@ $plan_colors = [
             <div class="card" style="max-width:480px">
                 <div class="card-header"><h3 id="admFormTitle">Asignar Administrador</h3></div>
                 <div class="card-body">
-                    <form action="../backend/processing/superadmin.php" method="POST">
+                    <form action="../api/v1/superadmin" method="POST">
                         <input type="hidden" name="csrf_token"   value="<?php echo csrf_generate(); ?>">
                         <input type="hidden" id="af_action"      name="action"       value="add_admin">
                         <input type="hidden" id="af_id"          name="adm_id"       value="">
@@ -787,7 +789,7 @@ $plan_colors = [
                     <h3 id="planFormTitle" style="font-size:15px;font-weight:800;color:#0f172a">Asignar Plan</h3>
                     <button onclick="closePlanForm()" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;padding:4px"><i class="fas fa-times"></i></button>
                 </div>
-                <form action="../backend/processing/superadmin.php" method="POST">
+                <form action="../api/v1/superadmin" method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                     <input type="hidden" name="action" value="assign_plan">
                     <input type="hidden" id="pf_sucursal" name="sub_sucursal" value="">
@@ -944,7 +946,7 @@ $plan_colors = [
             <div class="card" style="align-self:start;margin-bottom:0">
                 <div class="card-header" id="plan-form-title"><h3>Crear Plan</h3></div>
                 <div class="card-body">
-                    <form action="../backend/processing/superadmin.php" method="POST">
+                    <form action="../api/v1/superadmin" method="POST">
                         <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                         <input type="hidden" id="plan_action" name="action" value="add_plan">
                         <input type="hidden" id="plan_id" name="plan_id" value="">
@@ -988,7 +990,7 @@ $plan_colors = [
                         <button onclick="editPlan(<?php echo htmlspecialchars(json_encode($plan),ENT_QUOTES); ?>)" class="btn btn-ghost btn-sm" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.15);padding:3px 7px">
                             <i class="fas fa-pen" style="font-size:10px"></i>
                         </button>
-                        <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar plan?')">
+                        <form action="../api/v1/superadmin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar plan?')">
                             <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                             <input type="hidden" name="action" value="delete_plan">
                             <input type="hidden" name="id" value="<?php echo $plan['id']; ?>">
@@ -1195,7 +1197,7 @@ $plan_colors = [
                                 </span>
                             </td>
                             <td>
-                                <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este pago?')">
+                                <form action="../api/v1/superadmin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este pago?')">
                                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                     <input type="hidden" name="action" value="delete_pago">
                                     <input type="hidden" name="id" value="<?php echo $pg['id']; ?>">
@@ -1221,7 +1223,7 @@ $plan_colors = [
         <div class="card" style="max-width:640px">
             <div class="card-header"><h3>Ajustes del Sistema</h3></div>
             <div class="card-body">
-                <form action="../backend/processing/superadmin.php" method="POST">
+                <form action="../api/v1/superadmin" method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                     <input type="hidden" name="action" value="save_settings">
                     <div class="form-group">
@@ -1250,7 +1252,7 @@ $plan_colors = [
         <div class="card" style="max-width:640px">
             <div class="card-header"><h3>Editar Usuario</h3></div>
             <div class="card-body">
-                <form action="../backend/processing/usuarios.php" method="POST">
+                <form action="../api/v1/usuarios" method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                     <input type="hidden" name="action" value="editar_usuario">
                     <input type="hidden" name="id" value="<?php echo $edit_user['id']; ?>">
@@ -1339,7 +1341,7 @@ $plan_colors = [
                         <td style="text-align:right">
                             <a href="superadmin.php?page=usuarios&id=<?php echo $u['id']; ?>" class="action-btn"><i class="fas fa-pen"></i> Editar</a>
                             <?php if ($u['id'] != $_SESSION['user_id']): ?>
-                            <form action="../backend/processing/usuarios.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este usuario?')">
+                            <form action="../api/v1/usuarios" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este usuario?')">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" name="action" value="eliminar_usuario">
                                 <input type="hidden" name="id" value="<?php echo $u['id']; ?>">
@@ -1386,6 +1388,12 @@ if (menuBtn && sidebar && overlay) {
         }
     });
 }
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.AlCorte) {
+        AlCorte.bindApiForms('form[action$="api/v1/superadmin"]', 'dashboard');
+        AlCorte.bindApiForms('form[action$="api/v1/usuarios"]', 'usuarios');
+    }
+});
 </script>
 </body>
 </html>
