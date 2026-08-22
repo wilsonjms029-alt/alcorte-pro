@@ -50,6 +50,8 @@ alcorte-prueba/
 
 ## 🔧 Instalación
 
+> **Guía detallada para otra máquina (local):** ver [docs/DESPLIEGUE_LOCAL.md](docs/DESPLIEGUE_LOCAL.md) — Laragon/XAMPP, base de datos, URLs, credenciales y troubleshooting.
+
 ### Requisitos
 - PHP 7.4+
 - MySQL 5.7+
@@ -66,14 +68,11 @@ alcorte-prueba/
 
 2. **Configurar base de datos**
    - Crear base de datos: `barberia_db`
-   - Importar schema: `backend/database/schema.sql`
-   - Importar migración: `backend/database/migration.sql`
+   - Importar: `backend/database/init.sql`
+   - (Opcional demo) Con sesión SuperAdmin: `backend/database/seed.php`
 
-3. **Configurar variables de entorno**
-   ```bash
-   cp .env.example .env
-   # Editar .env con credenciales reales
-   ```
+3. **Configurar conexión BD**
+   - Editar credenciales en `backend/config/config.php` (o copiar `.env.example` a `.env` cuando esté integrado)
 
 4. **Establecer permisos (en servidor)**
    ```bash
@@ -89,7 +88,7 @@ alcorte-prueba/
 
 | Rol | Usuario | Contraseña | Acceso |
 |-----|---------|-----------|--------|
-| SuperAdmin | `superadmin` | `superadmin123` | Dashboard empresarial |
+| SuperAdmin | `admin` | `admin1234` | Torre de control (`frontend/superadmin.php`) |
 | Admin | `admin` | `admin123` | Panel de administración |
 | Gerente | `gerente` | `gerente123` | Dashboard de sucursal |
 | Barbero | `joshy` | `barbero123` | Mi agenda |
@@ -169,9 +168,8 @@ http://localhost/alcorte-prueba
 http://localhost/alcorte-prueba/backend/config/config.php
 # Debería devolver: Forbidden
 
-# Verificar API
-http://localhost/alcorte-prueba/backend/api/club.php?telefono=04121234567
-# Debería devolver JSON
+# Verificar API Club VIP (requiere token de tienda ?t=)
+http://localhost/alcorte-pro/backend/api/club.php?t=TOKEN_TIENDA&telefono=04121234567
 ```
 
 ## 📊 Flujos Principales
