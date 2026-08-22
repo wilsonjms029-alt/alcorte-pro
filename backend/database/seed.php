@@ -18,6 +18,7 @@ $conn->query("DELETE FROM suscripciones");
 $conn->query("DELETE FROM citas");
 $conn->query("DELETE FROM clientes");
 $conn->query("DELETE FROM usuarios WHERE rol = 'barbero'");
+$conn->query("DELETE FROM usuarios WHERE rol = 'admin' AND sucursal_id > 0");
 $conn->query("DELETE FROM barberos");
 $conn->query("DELETE FROM sucursales WHERE id > 1");
 $ok[] = "Datos de demo anteriores limpiados";
@@ -85,6 +86,22 @@ foreach ($barberos_def as $b) {
     $stmt->close();
 }
 $ok[] = count($barbero_ids) . " barberos (acceso: usuario / barbero123)";
+
+// ─────────── 3b. Administradores por tienda ───────────
+$hash_admin = password_hash('admin12345', PASSWORD_DEFAULT);
+$admins_def = [
+    ['admin_maracay',  'Admin Maracay',   $suc_maracay,  '0414-1111111'],
+    ['admin_sandiego', 'Admin San Diego', $suc_sandiego, '0414-2222222'],
+    ['admin_valencia', 'Admin Valencia',  $suc_valencia, '0414-3333333'],
+];
+foreach ($admins_def as $a) {
+    [$usuario, $nombre, $suc, $tel] = $a;
+    $stmt = $conn->prepare("INSERT INTO usuarios (usuario, password, nombre, telefono, rol, sucursal_id) VALUES (?, ?, ?, ?, 'admin', ?)");
+    $stmt->bind_param("ssssi", $usuario, $hash_admin, $nombre, $tel, $suc);
+    $stmt->execute();
+    $stmt->close();
+}
+$ok[] = count($admins_def) . " admins de tienda (usuario / admin12345)";
 
 // ─────────── 4. Clientes Club VIP ───────────
 $clientes_def = [
@@ -244,6 +261,7 @@ $ok[] = "Métodos de pago configurados (Pago Móvil, Zelle, Efectivo)";
         <div class="creds">
             <strong>Accesos de prueba:</strong><br>
             SuperAdmin → <b>admin</b> / admin1234<br>
+            Admins tienda → <b>admin_maracay</b>, <b>admin_sandiego</b>, <b>admin_valencia</b> / admin12345<br>
             Barberos → <b>joshy</b>, <b>carlos</b>, <b>andres</b>, <b>miguel</b>, <b>luis</b> / barbero123
         </div>
         <a href="../../frontend/superadmin.php" class="btn">← Ir al Panel SuperAdmin</a>
