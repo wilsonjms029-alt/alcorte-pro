@@ -46,9 +46,6 @@ if ($page == 'editar' && $edit_id) {
                 <a href="usuarios.php?page=lista" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-lg <?php echo $page == 'lista' ? 'text-slate-900 bg-slate-100 border-l-4 border-gold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'; ?>">
                     <i class="fa-solid fa-list w-5"></i> Usuarios
                 </a>
-                <a href="usuarios.php?page=crear" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-lg <?php echo $page == 'crear' ? 'text-slate-900 bg-slate-100 border-l-4 border-gold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'; ?>">
-                    <i class="fa-solid fa-user-plus w-5"></i> Crear Usuario
-                </a>
             </nav>
             <div class="p-4 border-t border-slate-100">
                 <a href="superadmin.php" class="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-600 hover:text-slate-900">
@@ -80,13 +77,12 @@ if ($page == 'editar' && $edit_id) {
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Usuario</th>
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Rol</th>
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Tienda</th>
-                                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Barbero</th>
                                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-200">
                                     <?php
-                                    $users = $conn->query("SELECT u.*, s.nombre as sucursal_nombre, b.nombre as barbero_nombre FROM usuarios u LEFT JOIN sucursales s ON u.sucursal_id = s.id LEFT JOIN barberos b ON u.barbero_id = b.id ORDER BY u.fecha_registro DESC");
+                                    $users = $conn->query("SELECT u.*, s.nombre as sucursal_nombre FROM usuarios u LEFT JOIN sucursales s ON u.sucursal_id = s.id WHERE u.rol != 'barbero' ORDER BY u.fecha_registro DESC");
                                     if ($users && $users->num_rows > 0) {
                                         while ($u = $users->fetch_assoc()) {
                                             ?>
@@ -98,12 +94,10 @@ if ($page == 'editar' && $edit_id) {
                                                         if ($u['rol'] == 'superadmin') echo 'bg-purple-100 text-purple-800';
                                                         elseif ($u['rol'] == 'admin') echo 'bg-blue-100 text-blue-800';
                                                         elseif ($u['rol'] == 'gerente') echo 'bg-amber-100 text-amber-800';
-                                                        elseif ($u['rol'] == 'barbero') echo 'bg-emerald-100 text-emerald-800';
-                                                        else echo 'bg-slate-100 text-slate-800';
+                                                                        else echo 'bg-slate-100 text-slate-800';
                                                     ?>"><?php echo htmlspecialchars($u['rol']); ?></span>
                                                 </td>
                                                 <td class="px-6 py-4 text-slate-600"><?php echo htmlspecialchars($u['sucursal_nombre'] ?? '-'); ?></td>
-                                                <td class="px-6 py-4 text-slate-600"><?php echo htmlspecialchars($u['barbero_nombre'] ?? '-'); ?></td>
                                                 <td class="px-6 py-4 text-right space-x-2">
                                                     <a href="usuarios.php?page=editar&id=<?php echo $u['id']; ?>" class="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">
                                                         <i class="fa-solid fa-pen mr-1"></i> Editar
@@ -129,18 +123,14 @@ if ($page == 'editar' && $edit_id) {
                         </div>
                     </div>
 
-                <?php elseif ($page == 'crear' || $page == 'editar'): ?>
+                <?php elseif ($page == 'editar'): ?>
                     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-8 max-w-2xl">
-                        <h2 class="text-xl font-bold text-slate-900 mb-6">
-                            <?php echo $page == 'crear' ? 'Crear Nuevo Usuario' : 'Editar Usuario'; ?>
-                        </h2>
+                        <h2 class="text-xl font-bold text-slate-900 mb-6">Editar Usuario</h2>
 
                         <form action="../backend/processing/usuarios.php" method="POST" class="space-y-6">
                             <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                            <input type="hidden" name="action" value="<?php echo $page == 'crear' ? 'crear_usuario' : 'editar_usuario'; ?>">
-                            <?php if ($page == 'editar'): ?>
-                                <input type="hidden" name="id" value="<?php echo $edit_user['id']; ?>">
-                            <?php endif; ?>
+                            <input type="hidden" name="action" value="editar_usuario">
+                            <input type="hidden" name="id" value="<?php echo $edit_user['id']; ?>">
 
                             <div>
                                 <label class="block text-sm font-bold text-slate-700 mb-2">Nombre Completo *</label>
@@ -148,15 +138,13 @@ if ($page == 'editar' && $edit_id) {
                             </div>
 
                             <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Nombre de Usuario *</label>
-                                <input type="text" name="usuario" value="<?php echo htmlspecialchars($edit_user['usuario'] ?? ''); ?>" required <?php echo $page == 'editar' ? 'readonly' : ''; ?> class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-gold">
+                                <label class="block text-sm font-bold text-slate-700 mb-2">Nombre de Usuario</label>
+                                <input type="text" value="<?php echo htmlspecialchars($edit_user['usuario'] ?? ''); ?>" readonly class="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500">
                             </div>
 
                             <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">
-                                    Contraseña <?php echo $page == 'crear' ? '*' : '(dejar en blanco para mantener)'; ?>
-                                </label>
-                                <input type="password" name="password" <?php echo $page == 'crear' ? 'required' : ''; ?> class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-gold">
+                                <label class="block text-sm font-bold text-slate-700 mb-2">Contraseña (dejar en blanco para mantener)</label>
+                                <input type="password" name="password" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-gold">
                                 <p class="text-xs text-slate-500 mt-1">Mínimo 8 caracteres</p>
                             </div>
 
@@ -172,7 +160,6 @@ if ($page == 'editar' && $edit_id) {
                                     <option value="superadmin" <?php echo (($edit_user['rol'] ?? '') == 'superadmin') ? 'selected' : ''; ?>>SuperAdmin</option>
                                     <option value="admin" <?php echo (($edit_user['rol'] ?? '') == 'admin') ? 'selected' : ''; ?>>Admin</option>
                                     <option value="gerente" <?php echo (($edit_user['rol'] ?? '') == 'gerente') ? 'selected' : ''; ?>>Gerente de Tienda</option>
-                                    <option value="barbero" <?php echo (($edit_user['rol'] ?? '') == 'barbero') ? 'selected' : ''; ?>>Barbero</option>
                                     <option value="cliente" <?php echo (($edit_user['rol'] ?? '') == 'cliente') ? 'selected' : ''; ?>>Cliente</option>
                                 </select>
                             </div>
@@ -191,23 +178,9 @@ if ($page == 'editar' && $edit_id) {
                                 </select>
                             </div>
 
-                            <div id="field_barbero" style="display:none;">
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Barbero *</label>
-                                <select name="barbero_id" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-gold">
-                                    <option value="">Selecciona barbero</option>
-                                    <?php
-                                    $barberos = $conn->query("SELECT * FROM barberos WHERE activo = 1 ORDER BY nombre");
-                                    while ($barb = $barberos->fetch_assoc()) {
-                                        $selected = (($edit_user['barbero_id'] ?? 0) == $barb['id']) ? 'selected' : '';
-                                        echo "<option value=\"{$barb['id']}\" {$selected}>" . htmlspecialchars($barb['nombre']) . "</option>";
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-
                             <div class="flex gap-4 pt-6 border-t border-slate-200">
                                 <button type="submit" class="flex-1 px-6 py-3 bg-gold text-white font-bold rounded-lg hover:bg-opacity-90">
-                                    <i class="fa-solid fa-save mr-2"></i> <?php echo $page == 'crear' ? 'Crear Usuario' : 'Actualizar Usuario'; ?>
+                                    <i class="fa-solid fa-save mr-2"></i> Actualizar Usuario
                                 </button>
                                 <a href="usuarios.php?page=lista" class="flex-1 px-6 py-3 bg-slate-200 text-slate-900 font-bold rounded-lg text-center hover:bg-slate-300">
                                     Cancelar
@@ -219,8 +192,7 @@ if ($page == 'editar' && $edit_id) {
                     <script>
                         function toggleRolFields() {
                             const rol = document.getElementById('rol').value;
-                            document.getElementById('field_sucursal').style.display = ['admin','gerente','barbero'].includes(rol) ? 'block' : 'none';
-                            document.getElementById('field_barbero').style.display = (rol === 'barbero') ? 'block' : 'none';
+                            document.getElementById('field_sucursal').style.display = ['admin','gerente'].includes(rol) ? 'block' : 'none';
                         }
                         toggleRolFields();
                     </script>

@@ -9,8 +9,8 @@ $queries = [
         id INT AUTO_INCREMENT PRIMARY KEY,
         nombre VARCHAR(100) NOT NULL,
         precio_mensual DECIMAL(10,2) NOT NULL DEFAULT 0,
-        max_barberos INT NOT NULL DEFAULT 3,
-        max_citas_mes INT NOT NULL DEFAULT 100,
+        max_barberos INT NOT NULL DEFAULT 1,
+        nivel TINYINT NOT NULL DEFAULT 1,
         descripcion TEXT,
         activo TINYINT(1) NOT NULL DEFAULT 1,
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -34,10 +34,26 @@ $queries = [
         duracion VARCHAR(50) DEFAULT '30 min',
         precio VARCHAR(50) DEFAULT '',
         icono VARCHAR(80) DEFAULT 'fas fa-cut',
+        imagen_url VARCHAR(500) DEFAULT NULL,
+        descripcion VARCHAR(255) DEFAULT '',
         activo TINYINT(1) NOT NULL DEFAULT 1,
         sucursal_id INT NOT NULL DEFAULT 1,
         orden INT NOT NULL DEFAULT 0,
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+    "bloqueos_horario" => "CREATE TABLE IF NOT EXISTS bloqueos_horario (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        barbero_id INT NOT NULL,
+        fecha DATE NOT NULL,
+        hora_inicio TIME DEFAULT NULL,
+        hora_fin TIME DEFAULT NULL,
+        dia_completo TINYINT(1) NOT NULL DEFAULT 0,
+        motivo VARCHAR(200) DEFAULT '',
+        sucursal_id INT NOT NULL,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barbero_id) REFERENCES barberos(id) ON DELETE CASCADE,
+        INDEX idx_barbero_fecha (barbero_id, fecha)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
     "pagos_suscripcion" => "CREATE TABLE IF NOT EXISTS pagos_suscripcion (
@@ -64,13 +80,38 @@ foreach ($queries as $tabla => $sql) {
     }
 }
 
+// Migrar columna imagen_url en servicios si no existe
+$cols = $conn->query("SHOW COLUMNS FROM servicios LIKE 'imagen_url'");
+if ($cols && $cols->num_rows === 0) {
+    $conn->query("ALTER TABLE servicios ADD COLUMN imagen_url VARCHAR(500) DEFAULT NULL AFTER icono");
+}
+
+// Migrar columna descripcion en servicios si no existe
+$cols_desc = $conn->query("SHOW COLUMNS FROM servicios LIKE 'descripcion'");
+if ($cols_desc && $cols_desc->num_rows === 0) {
+    $conn->query("ALTER TABLE servicios ADD COLUMN descripcion VARCHAR(255) DEFAULT '' AFTER imagen_url");
+}
+
+// Migrar columna token en sucursales si no existe + generar tokens para filas existentes
+$cols2 = $conn->query("SHOW COLUMNS FROM sucursales LIKE 'token'");
+if ($cols2 && $cols2->num_rows === 0) {
+    $conn->query("ALTER TABLE sucursales ADD COLUMN token VARCHAR(64) UNIQUE AFTER direccion");
+    $rows = $conn->query("SELECT id FROM sucursales WHERE token IS NULL OR token = ''");
+    if ($rows) while ($r = $rows->fetch_assoc()) {
+        $tok = bin2hex(random_bytes(16));
+        $st  = $conn->prepare("UPDATE sucursales SET token = ? WHERE id = ?");
+        $st->bind_param("si", $tok, $r['id']);
+        $st->execute(); $st->close();
+    }
+}
+
 // Insertar planes por defecto si no existen
 $count = $conn->query("SELECT COUNT(*) as c FROM planes")->fetch_assoc()['c'];
 if ($count == 0) {
-    $conn->query("INSERT INTO planes (nombre, precio_mensual, max_barberos, max_citas_mes, descripcion) VALUES
-        ('Básico', 29.99, 2, 100, 'Plan ideal para barberías pequeñas que inician'),
-        ('Profesional', 59.99, 5, 300, 'Para negocios en crecimiento con múltiples barberos'),
-        ('Empresarial', 99.99, 15, 1000, 'Para cadenas y franquicias con múltiples sedes')
+    $conn->query("INSERT INTO planes (nombre, precio_mensual, max_barberos, nivel, descripcion) VALUES
+        ('Básico', 10.00, 1, 1, 'Para barberos independientes'),
+        ('Profesional', 30.00, 5, 2, 'Para barberías con equipo de trabajo'),
+        ('Pro', 70.00, 0, 3, 'Para grandes barberías sin límites de personal')
     ");
     $ok[] = "3 planes por defecto insertados";
 }

@@ -23,7 +23,7 @@ $conn->query("DELETE FROM sucursales WHERE id > 1");
 $ok[] = "Datos de demo anteriores limpiados";
 
 // id=1 = ámbito "Administración" (global/admin). NO es una tienda visible.
-$conn->query("INSERT INTO sucursales (id, nombre, direccion, activo) VALUES (1, 'Administración', 'Ámbito global del sistema', 1)
+$conn->query("INSERT INTO sucursales (id, nombre, direccion, token, activo) VALUES (1, 'Administración', 'Ámbito global del sistema', MD5(RAND()), 1)
               ON DUPLICATE KEY UPDATE nombre = 'Administración', direccion = 'Ámbito global del sistema'");
 
 // Corregir acentos de los planes (el import original de init.sql los dañó)
@@ -47,8 +47,9 @@ foreach ([
     'sandiego' => ['Tienda San Diego', 'C.C. Hyper Jumbo, San Diego, Carabobo'],
     'valencia' => ['Tienda Valencia',  'Av. Bolívar Norte, Valencia'],
 ] as $key => $s) {
-    $stmt = $conn->prepare("INSERT INTO sucursales (nombre, direccion, activo) VALUES (?, ?, 1)");
-    $stmt->bind_param("ss", $s[0], $s[1]);
+    $stmt = $conn->prepare("INSERT INTO sucursales (nombre, direccion, token, activo) VALUES (?, ?, ?, 1)");
+    $tok = bin2hex(random_bytes(16));
+    $stmt->bind_param("sss", $s[0], $s[1], $tok);
     $stmt->execute();
     $tiendas[$key] = $stmt->insert_id;
     $stmt->close();

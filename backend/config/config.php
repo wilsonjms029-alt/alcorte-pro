@@ -6,10 +6,19 @@
  * - Sesión y utilidades CSRF
  */
 
+// ─────────── Timezone ───────────
+date_default_timezone_set('America/Caracas');
+
 // ─────────── Manejo de errores (producción-segura) ───────────
 error_reporting(E_ALL);
 ini_set('display_errors', '0');   // nunca mostrar errores crudos al usuario
 ini_set('log_errors', '1');
+
+// ─────────── Sesión ───────────
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 
 $logDir = __DIR__ . '/../logs';
 if (!is_dir($logDir)) {
@@ -75,6 +84,7 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT); // excepciones en err
 try {
     $conn = new mysqli($host, $user, $pass, $db);
     $conn->set_charset('utf8mb4');
+    $conn->query("SET time_zone = '-04:00'");
 } catch (\Throwable $e) {
     error_log('Error de conexión BD: ' . $e->getMessage());
     if (!headers_sent()) {
@@ -86,10 +96,111 @@ try {
     </div>");
 }
 
-// ─────────── Sesión ───────────
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+// ─────────── Migraciones automáticas ───────────
+try {
+    mysqli_report(MYSQLI_REPORT_OFF);
+
+    $r = $conn->query("SHOW COLUMNS FROM sucursales LIKE 'token'");
+    if ($r && $r->num_rows === 0) {
+        $conn->query("ALTER TABLE sucursales ADD COLUMN token VARCHAR(64) UNIQUE AFTER direccion");
+    }
+    $rows = $conn->query("SELECT id FROM sucursales WHERE token IS NULL OR token = ''");
+    if ($rows) {
+        while ($row = $rows->fetch_assoc()) {
+            $tok = bin2hex(random_bytes(16));
+            $st  = $conn->prepare("UPDATE sucursales SET token = ? WHERE id = ?");
+            $st->bind_param("si", $tok, $row['id']);
+            $st->execute();
+            $st->close();
+        }
+    }
+    $r2 = $conn->query("SHOW COLUMNS FROM servicios LIKE 'imagen_url'");
+    if ($r2 && $r2->num_rows === 0) {
+        $conn->query("ALTER TABLE servicios ADD COLUMN imagen_url VARCHAR(500) DEFAULT NULL AFTER icono");
+    }
+
+    // Migrar tabla planes: reemplazar max_citas_mes por nivel
+    $r3 = $conn->query("SHOW COLUMNS FROM planes LIKE 'nivel'");
+    if ($r3 && $r3->num_rows === 0) {
+        $conn->query("ALTER TABLE planes ADD COLUMN nivel TINYINT NOT NULL DEFAULT 1 AFTER max_barberos");
+        // Asignar nivel según max_barberos existente
+        $conn->query("UPDATE planes SET nivel = CASE WHEN max_barberos <= 1 THEN 1 WHEN max_barberos <= 5 THEN 2 ELSE 3 END");
+    }
+    // Eliminar columna max_citas_mes si aún existe
+    $r4 = $conn->query("SHOW COLUMNS FROM planes LIKE 'max_citas_mes'");
+    if ($r4 && $r4->num_rows > 0) {
+        $conn->query("ALTER TABLE planes DROP COLUMN max_citas_mes");
+    }
+    // Actualizar planes por defecto a los nuevos valores
+    $conn->query("UPDATE planes SET nombre='Básico', precio_mensual=10.00, max_barberos=1, nivel=1, descripcion='Para barberos independientes' WHERE id=1 AND precio_mensual=29.99");
+    $conn->query("UPDATE planes SET nombre='Profesional', precio_mensual=30.00, max_barberos=5, nivel=2, descripcion='Para barberías con equipo de trabajo' WHERE id=2 AND precio_mensual=59.99");
+    $conn->query("UPDATE planes SET nombre='Pro', precio_mensual=70.00, max_barberos=0, nivel=3, descripcion='Para grandes barberías sin límites de personal' WHERE id=3 AND precio_mensual=99.99");
+
+    // Columna estado en citas
+    $r_estado = $conn->query("SHOW COLUMNS FROM citas LIKE 'estado'");
+    if ($r_estado && $r_estado->num_rows === 0) {
+        $conn->query("ALTER TABLE citas ADD COLUMN estado ENUM('programada','completada','cancelada') NOT NULL DEFAULT 'programada' AFTER estado_pago");
+    }
+
+    // Tabla bloqueos_horario
+    $conn->query("CREATE TABLE IF NOT EXISTS bloqueos_horario (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        barbero_id INT NOT NULL,
+        fecha DATE NOT NULL,
+        hora_inicio TIME DEFAULT NULL,
+        hora_fin TIME DEFAULT NULL,
+        dia_completo TINYINT(1) NOT NULL DEFAULT 0,
+        motivo VARCHAR(200) DEFAULT '',
+        sucursal_id INT NOT NULL,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (barbero_id) REFERENCES barberos(id) ON DELETE CASCADE,
+        INDEX idx_barbero_fecha (barbero_id, fecha)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Tabla productos (plan Pro)
+    $conn->query("CREATE TABLE IF NOT EXISTS productos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(150) NOT NULL,
+        descripcion VARCHAR(255) DEFAULT '',
+        precio DECIMAL(10,2) NOT NULL DEFAULT 0,
+        stock INT NOT NULL DEFAULT 0,
+        imagen_url VARCHAR(500) DEFAULT NULL,
+        activo TINYINT(1) NOT NULL DEFAULT 1,
+        sucursal_id INT NOT NULL,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Tabla pedidos (plan Pro)
+    $conn->query("CREATE TABLE IF NOT EXISTS pedidos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sucursal_id INT NOT NULL,
+        cliente_nombre VARCHAR(100) NOT NULL,
+        cliente_telefono VARCHAR(20) NOT NULL,
+        metodo_pago VARCHAR(50) NOT NULL,
+        referencia_pago VARCHAR(50) NOT NULL,
+        estado_pago VARCHAR(20) DEFAULT 'pendiente',
+        estado VARCHAR(20) DEFAULT 'pendiente',
+        total DECIMAL(10,2) NOT NULL DEFAULT 0,
+        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Tabla pedido_detalles (plan Pro)
+    $conn->query("CREATE TABLE IF NOT EXISTS pedido_detalles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        pedido_id INT NOT NULL,
+        producto_id INT NOT NULL,
+        nombre_producto VARCHAR(150) NOT NULL,
+        cantidad INT NOT NULL DEFAULT 1,
+        precio_unitario DECIMAL(10,2) NOT NULL,
+        FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+} catch (\Throwable $e) {
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+    error_log('Migración: ' . $e->getMessage());
 }
+
 
 // ─────────── Utilidades CSRF ───────────
 function csrf_generate(): string {
@@ -106,4 +217,32 @@ function csrf_validate(): bool {
 
 function csrf_regenerate(): void {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// ─────────── Plan de sucursal ───────────
+function get_plan_sucursal(mysqli $conn, int $sucursal_id): ?array {
+    $stmt = $conn->prepare(
+        "SELECT p.id, p.nombre, p.nivel, p.max_barberos, p.precio_mensual
+         FROM suscripciones s
+         JOIN planes p ON s.plan_id = p.id
+         WHERE s.sucursal_id = ? AND s.estado = 'activo' AND s.fecha_vencimiento >= CURDATE()
+         ORDER BY s.id DESC LIMIT 1"
+    );
+    $stmt->bind_param("i", $sucursal_id);
+    $stmt->execute();
+    $plan = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$plan) return null;
+    $nivel = intval($plan['nivel']);
+    return [
+        'id'                 => intval($plan['id']),
+        'nombre'             => $plan['nombre'],
+        'nivel'              => $nivel,
+        'max_barberos'       => intval($plan['max_barberos']),
+        'precio_mensual'     => $plan['precio_mensual'],
+        'has_club_vip'       => $nivel >= 2,
+        'has_custom_colors'  => $nivel >= 2,
+        'has_service_images' => $nivel >= 2,
+        'has_productos'      => $nivel >= 3,
+    ];
 }

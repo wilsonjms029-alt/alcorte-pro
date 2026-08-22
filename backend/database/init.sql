@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS sucursales (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL,
     direccion TEXT,
+    token VARCHAR(64) NOT NULL UNIQUE,
     activo TINYINT(1) NOT NULL DEFAULT 1,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -69,8 +70,8 @@ CREATE TABLE IF NOT EXISTS planes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     precio_mensual DECIMAL(10,2) NOT NULL DEFAULT 0,
-    max_barberos INT NOT NULL DEFAULT 3,
-    max_citas_mes INT NOT NULL DEFAULT 100,
+    max_barberos INT NOT NULL DEFAULT 1,
+    nivel TINYINT NOT NULL DEFAULT 1,
     descripcion TEXT,
     activo TINYINT(1) NOT NULL DEFAULT 1,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -109,15 +110,42 @@ CREATE TABLE IF NOT EXISTS servicios (
     duracion VARCHAR(50) DEFAULT '30 min',
     precio VARCHAR(50) DEFAULT '',
     icono VARCHAR(80) DEFAULT 'fas fa-cut',
+    descripcion VARCHAR(255) DEFAULT '',
     activo TINYINT(1) NOT NULL DEFAULT 1,
     sucursal_id INT NOT NULL DEFAULT 1,
     orden INT NOT NULL DEFAULT 0,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS productos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    descripcion VARCHAR(255) DEFAULT '',
+    precio DECIMAL(10,2) NOT NULL DEFAULT 0,
+    stock INT NOT NULL DEFAULT 0,
+    imagen_url VARCHAR(500) DEFAULT NULL,
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    sucursal_id INT NOT NULL,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS bloqueos_horario (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    barbero_id INT NOT NULL,
+    fecha DATE NOT NULL,
+    hora_inicio TIME DEFAULT NULL,
+    hora_fin TIME DEFAULT NULL,
+    dia_completo TINYINT(1) NOT NULL DEFAULT 0,
+    motivo VARCHAR(200) DEFAULT '',
+    sucursal_id INT NOT NULL,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (barbero_id) REFERENCES barberos(id) ON DELETE CASCADE,
+    INDEX idx_barbero_fecha (barbero_id, fecha)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Sede Central (sucursal base del sistema, id fijo = 1)
-INSERT IGNORE INTO sucursales (id, nombre, direccion, activo)
-VALUES (1, 'Sede Central', 'Casa matriz del negocio', 1);
+INSERT IGNORE INTO sucursales (id, nombre, direccion, token, activo)
+VALUES (1, 'Sede Central', 'Casa matriz del negocio', MD5(RAND()), 1);
 
 -- Default superadmin: usuario=admin, password=admin1234
 INSERT IGNORE INTO usuarios (usuario, password, nombre, rol)
@@ -134,8 +162,8 @@ INSERT IGNORE INTO configuracion (clave, valor, sucursal_id) VALUES
 ('banco_ci', '', 1),
 ('zelle_email', '', 1);
 
--- Default plans
-INSERT IGNORE INTO planes (id, nombre, precio_mensual, max_barberos, max_citas_mes, descripcion) VALUES
-(1, 'Básico', 29.99, 2, 100, 'Plan ideal para barberías pequeñas que inician'),
-(2, 'Profesional', 59.99, 5, 300, 'Para negocios en crecimiento con múltiples barberos'),
-(3, 'Empresarial', 99.99, 15, 1000, 'Para cadenas y franquicias con múltiples sedes');
+-- Default plans (nivel: 1=basico, 2=profesional, 3=pro; max_barberos: 0=ilimitado)
+INSERT IGNORE INTO planes (id, nombre, precio_mensual, max_barberos, nivel, descripcion) VALUES
+(1, 'Básico', 10.00, 1, 1, 'Para barberos independientes'),
+(2, 'Profesional', 30.00, 5, 2, 'Para barberías con equipo de trabajo'),
+(3, 'Pro', 70.00, 0, 3, 'Para grandes barberías sin límites de personal');

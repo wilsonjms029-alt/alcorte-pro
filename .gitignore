@@ -15,3 +15,4 @@ Thumbs.db
 # Test/diagnostic files
 test.php
 diagnostico.html
+backend/cache/

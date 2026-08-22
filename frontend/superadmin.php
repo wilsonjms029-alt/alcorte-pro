@@ -11,7 +11,7 @@ $msg  = isset($_GET['msg']) ? htmlspecialchars($_GET['msg']) : '';
 
 // === KPIs MACRO ===
 $total_citas      = $conn->query("SELECT COUNT(*) as t FROM citas")->fetch_assoc()['t'];
-$total_sucursales = $conn->query("SELECT COUNT(*) as t FROM sucursales WHERE id > 1")->fetch_assoc()['t'];
+$total_sucursales = $conn->query("SELECT COUNT(*) as t FROM sucursales")->fetch_assoc()['t'];
 $total_barberos   = $conn->query("SELECT COUNT(*) as t FROM barberos")->fetch_assoc()['t'];
 
 // === GRÁFICA DASHBOARD ===
@@ -60,7 +60,7 @@ if ($has_subs && $has_pagos) {
     if ($r) while ($row = $r->fetch_assoc()) $subs_arr[] = $row;
     $r2 = $conn->query("SELECT DATE_FORMAT(fecha_pago,'%b %Y') as mes, SUM(monto) as total
         FROM pagos_suscripcion WHERE fecha_pago >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-        GROUP BY DATE_FORMAT(fecha_pago,'%Y-%m') ORDER BY fecha_pago ASC");
+        GROUP BY DATE_FORMAT(fecha_pago,'%Y-%m'), DATE_FORMAT(fecha_pago,'%b %Y') ORDER BY DATE_FORMAT(fecha_pago,'%Y-%m') ASC");
     if ($r2) while ($row = $r2->fetch_assoc()) {
         $ingresos_por_mes_labels[] = $row['mes'];
         $ingresos_por_mes_vals[]   = (float)$row['total'];
@@ -72,9 +72,19 @@ $recaudacion_suc = [];
 if ($has_pagos) {
     $r = $conn->query("SELECT s.id, s.nombre, COALESCE(SUM(p.monto),0) as total
         FROM sucursales s LEFT JOIN pagos_suscripcion p ON p.sucursal_id = s.id
-        WHERE s.id > 1
         GROUP BY s.id, s.nombre");
     if ($r) while ($row = $r->fetch_assoc()) $recaudacion_suc[$row['id']] = $row;
+}
+
+// === USUARIOS ===
+$edit_user_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$edit_user = null;
+if ($page == 'usuarios' && $edit_user_id) {
+    $stmt = $conn->prepare("SELECT * FROM usuarios WHERE id = ?");
+    $stmt->bind_param("i", $edit_user_id);
+    $stmt->execute();
+    $edit_user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 }
 
 // === CONFIG ===
@@ -84,7 +94,8 @@ if ($r) while ($row = $r->fetch_assoc()) $config[$row['clave']] = $row['valor'];
 
 // === SUCURSALES ===
 $sucursales_arr = [];
-$r = $conn->query("SELECT id, nombre, direccion FROM sucursales WHERE id > 1 ORDER BY id ASC");
+$r = @$conn->query("SELECT id, nombre, direccion, token FROM sucursales ORDER BY id ASC");
+if (!$r) $r = $conn->query("SELECT id, nombre, direccion, '' AS token FROM sucursales ORDER BY id ASC");
 if ($r) while ($row = $r->fetch_assoc()) $sucursales_arr[] = $row;
 
 // Plan colores
@@ -189,15 +200,16 @@ $plan_colors = [
         .plan-badge{display:inline-block;padding:3px 9px;border-radius:.5rem;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:1px solid}
 
         /* ── DARK PLAN CARD (al-turno style) ── */
-        .plan-dark-card{background:#0f172a;border-radius:2rem;padding:28px;color:white;position:relative;overflow:hidden}
-        .plan-dark-card::before{content:'';position:absolute;top:-40px;right:-40px;width:180px;height:180px;background:radial-gradient(circle,rgba(180,147,99,.15) 0%,transparent 70%);border-radius:50%}
-        .plan-dark-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.2em;color:rgba(255,255,255,.4);margin-bottom:12px}
-        .plan-dark-name{font-size:2.5rem;font-weight:900;font-style:italic;letter-spacing:-.03em;color:white;line-height:1}
-        .plan-dark-price{font-size:1.25rem;font-weight:900;color:#b49363;margin-top:8px;font-family:Monaco,monospace}
-        .plan-dark-features{margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08)}
-        .plan-dark-feature{font-size:12px;color:rgba(255,255,255,.6);padding:3px 0;display:flex;align-items:center;gap:8px}
-        .plan-dark-feature i{color:#b49363;font-size:10px}
-        .plan-dark-actions{position:absolute;top:16px;right:16px;display:flex;gap:6px}
+        .plan-dark-card{background:#0f172a;border-radius:1rem;padding:16px 18px;color:white;position:relative;overflow:hidden}
+        .plan-dark-card::before{content:'';position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:radial-gradient(circle,rgba(180,147,99,.15) 0%,transparent 70%);border-radius:50%}
+        .plan-dark-name{font-size:1.2rem;font-weight:900;font-style:italic;letter-spacing:-.02em;color:white;line-height:1;margin-bottom:4px}
+        .plan-dark-price{font-size:1.5rem;font-weight:900;color:#b49363;font-family:Monaco,monospace;line-height:1}
+        .plan-dark-price span{font-size:11px;color:#64748b;font-family:Inter,sans-serif;font-weight:500}
+        .plan-dark-features{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+        .plan-dark-feature{font-size:11px;color:rgba(255,255,255,.55);padding:2px 0;display:flex;align-items:center;gap:6px}
+        .plan-dark-feature i{color:#b49363;font-size:9px;flex-shrink:0}
+        .plan-dark-actions{position:absolute;top:10px;right:10px;display:flex;gap:4px}
+        .planes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
 
         /* ── BUTTONS ── */
         .btn{padding:10px 18px;border:none;border-radius:.75rem;font-size:11px;font-weight:900;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.08em;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
@@ -243,17 +255,22 @@ $plan_colors = [
         /* ── SETUP BANNER ── */
         .setup-banner{margin:0 0 24px;padding:14px 18px;background:#fffbeb;border:1px solid #fde68a;border-radius:.75rem;font-size:13px;color:#92400e;display:flex;align-items:center;gap:10px;font-weight:600}
 
-        @media(max-width:768px){
-            .sidebar{width:210px}.main{margin-left:210px}
-            .grid-2,.grid-equal,.grid-3{grid-template-columns:1fr}
-            .form-row{grid-template-columns:1fr}
-            .content{padding:16px}
-        }
-        @media(max-width:640px){
-            .sidebar{position:fixed;left:-100%;transition:left .3s}
+        .shops-layout{display:grid;grid-template-columns:320px 1fr;gap:24px;align-items:start}
+        .shop-plan-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+        @media(max-width:900px){
+            .sidebar{position:fixed;left:-248px;transition:all .3s ease;z-index:200}
             .sidebar.open{left:0}
             .main{margin-left:0}
+            .grid-2,.grid-equal,.grid-3,.shops-layout{grid-template-columns:1fr}
+            .shop-plan-stats{grid-template-columns:1fr}
+            .form-row{grid-template-columns:1fr}
+            .content{padding:16px}
+            .menu-toggle{display:inline-flex !important;align-items:center;justify-content:center;width:36px;height:36px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.5rem;cursor:pointer;color:#0f172a;margin-right:10px}
+            .sidebar-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:150}
+            .sidebar-overlay.active{display:block}
         }
+        .shops-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
     </style>
 </head>
 <body>
@@ -287,7 +304,7 @@ $plan_colors = [
             <i class="fas fa-credit-card"></i><span>Pagos</span>
         </a>
         <div class="nav-section">Admin</div>
-        <a href="usuarios.php" class="nav-item">
+        <a href="superadmin.php?page=usuarios" class="nav-item <?php echo $page=='usuarios'?'active':''; ?>">
             <i class="fas fa-users"></i><span>Usuarios</span>
         </a>
         <a href="superadmin.php?page=settings" class="nav-item <?php echo $page=='settings'?'active':''; ?>">
@@ -305,14 +322,16 @@ $plan_colors = [
         <a href="logout.php" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Salir</a>
     </div>
 </aside>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <!-- ══ MAIN ══ -->
 <div class="main">
     <nav class="topnav">
         <div class="breadcrumb">
+            <button class="menu-toggle" id="menuBtn" style="display:none;"><i class="fas fa-bars"></i></button>
             Torre de Control <i class="fas fa-chevron-right" style="font-size:8px;color:#cbd5e1"></i>
             <span><?php
-                $page_labels = ['dashboard'=>'DASHBOARD','estadisticas'=>'ESTADÍSTICAS','barbershops'=>'TIENDAS','planes'=>'PLANES','pagos'=>'PAGOS','settings'=>'CONFIGURACIÓN'];
+                $page_labels = ['dashboard'=>'DASHBOARD','estadisticas'=>'ESTADÍSTICAS','barbershops'=>'TIENDAS','planes'=>'PLANES','pagos'=>'PAGOS','settings'=>'CONFIGURACIÓN','usuarios'=>'USUARIOS'];
                 echo $page_labels[$page] ?? strtoupper(str_replace('_',' ',$page));
             ?></span>
         </div>
@@ -350,10 +369,6 @@ $plan_colors = [
             <div class="stat-card gold">
                 <div class="stat-label">Tiendas</div>
                 <div class="stat-value"><?php echo $total_sucursales; ?></div>
-            </div>
-            <div class="stat-card purple">
-                <div class="stat-label">Barberos</div>
-                <div class="stat-value"><?php echo $total_barberos; ?></div>
             </div>
             <div class="stat-card green">
                 <div class="stat-label">Ingresos Totales</div>
@@ -414,131 +429,11 @@ $plan_colors = [
             </div>
         </div>
 
-        <div class="grid-equal" style="margin-bottom:24px">
-            <div class="card" style="margin-bottom:0">
-                <div class="card-header"><h3>Ingresos por Mes</h3></div>
-                <div class="card-body"><div style="height:220px"><canvas id="chartBar"></canvas></div></div>
-            </div>
-            <div class="card" style="margin-bottom:0">
-                <div class="card-header"><h3>Asignar Plan a Tienda</h3></div>
-                <div class="card-body">
-                    <form action="../backend/processing/superadmin.php" method="POST">
-                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                        <input type="hidden" name="action" value="assign_plan">
-                        <div class="form-group">
-                            <label class="form-label">Tienda</label>
-                            <select name="sub_sucursal" class="form-select" required>
-                                <option value="">— Seleccionar sucursal —</option>
-                                <?php foreach($sucursales_arr as $s): ?>
-                                <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['nombre']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Plan</label>
-                            <select name="sub_plan" class="form-select" required>
-                                <option value="">— Seleccionar plan —</option>
-                                <?php foreach($planes_arr as $p): ?>
-                                <option value="<?php echo $p['id']; ?>"><?php echo htmlspecialchars($p['nombre']); ?> — $<?php echo number_format($p['precio_mensual'],2); ?>/mes</option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label">Desde</label>
-                                <input type="date" name="sub_inicio" class="form-input" value="<?php echo date('Y-m-d'); ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Hasta</label>
-                                <input type="date" name="sub_fin" class="form-input" value="<?php echo date('Y-m-d', strtotime('+30 days')); ?>" required>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-gold btn-full">Asignar Plan</button>
-                    </form>
-                </div>
-            </div>
+        <div class="card" style="margin-bottom:24px">
+            <div class="card-header"><h3>Ingresos por Mes</h3></div>
+            <div class="card-body"><div style="height:220px"><canvas id="chartBar"></canvas></div></div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h3>Listado de Tiendas</h3>
-                <small>Estado de planes y subdominios</small>
-            </div>
-            <div class="table-wrap">
-                <table>
-                    <thead><tr>
-                        <th>Tienda</th>
-                        <th>Plan Activo</th>
-                        <th>Recaudación</th>
-                        <th>Vencimiento</th>
-                        <th>Estado</th>
-                        <th style="text-align:right">Acción</th>
-                    </tr></thead>
-                    <tbody>
-                    <?php
-                    $all_suc = $conn->query("SELECT s.*, sub.plan_id, sub.fecha_vencimiento, sub.estado as sub_estado, pl.nombre as plan_nombre, pl.precio_mensual
-                        FROM sucursales s
-                        LEFT JOIN suscripciones sub ON sub.sucursal_id = s.id
-                        LEFT JOIN planes pl ON pl.id = sub.plan_id
-                        WHERE s.id > 1
-                        ORDER BY s.nombre");
-                    if ($all_suc && $all_suc->num_rows > 0):
-                        $pci = 0;
-                        while ($suc = $all_suc->fetch_assoc()):
-                            $rec = $recaudacion_suc[$suc['id']]['total'] ?? 0;
-                            $hoy = new DateTime();
-                            $vence = $suc['fecha_vencimiento'] ? new DateTime($suc['fecha_vencimiento']) : null;
-                            $vencida = $vence && $vence < $hoy;
-                            $proxima = $vence && !$vencida && $hoy->diff($vence)->days <= 7;
-                            $pc = $plan_colors[$pci % 3];
-                            $pci++;
-                    ?>
-                    <tr>
-                        <td>
-                            <div style="font-weight:800;color:#0f172a;font-size:13px"><?php echo htmlspecialchars($suc['nombre']); ?></div>
-                        </td>
-                        <td>
-                            <?php if($suc['plan_nombre']): ?>
-                            <span class="plan-badge" style="background:<?php echo $pc['bg']; ?>;color:<?php echo $pc['color']; ?>;border-color:<?php echo $pc['border']; ?>">
-                                <?php echo htmlspecialchars($suc['plan_nombre']); ?>
-                            </span>
-                            <?php else: ?>
-                            <span style="font-size:11px;color:#94a3b8;font-style:italic">Sin plan</span>
-                            <?php endif; ?>
-                        </td>
-                        <td style="font-family:Monaco,monospace;font-weight:800;color:#0f172a">
-                            $<?php echo number_format($rec, 2); ?>
-                        </td>
-                        <td style="font-size:12px">
-                            <?php if($vence): ?>
-                                <?php echo $vence->format('d/m/Y'); ?>
-                                <?php if($proxima): ?><span style="font-size:10px;color:#d97706;font-weight:800;margin-left:4px">⚠ Vence pronto</span><?php endif; ?>
-                            <?php else: ?>
-                                <span style="color:#94a3b8;font-style:italic">—</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if(!$suc['plan_nombre']): ?>
-                                <span class="status-pill suspended"><span class="dot"></span>Sin plan</span>
-                            <?php elseif($vencida): ?>
-                                <span class="status-pill expired"><span class="dot"></span>Vencida</span>
-                            <?php else: ?>
-                                <span class="status-pill active"><span class="dot"></span>Activa</span>
-                            <?php endif; ?>
-                        </td>
-                        <td style="text-align:right">
-                            <a href="superadmin.php?page=pagos" class="action-btn">
-                                <i class="fas fa-eye"></i> Gestionar
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endwhile; else: ?>
-                    <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8">Sin tiendas registradas</td></tr>
-                    <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
 
         <script>
         new Chart(document.getElementById('chartBar').getContext('2d'),{
@@ -558,15 +453,84 @@ $plan_colors = [
             $admins_map = [];
             $r = $conn->query("SELECT id, nombre, usuario, telefono, sucursal_id FROM usuarios WHERE rol='admin' AND sucursal_id > 0");
             if ($r) while ($row = $r->fetch_assoc()) $admins_map[$row['sucursal_id']] = $row;
+
+            // Data enriquecida por tienda
+            $shop_data = [];
+            foreach ($sucursales_arr as $s) {
+                $sid = $s['id'];
+                // Barberos activos
+                $bc = $conn->prepare("SELECT COUNT(*) as t FROM barberos WHERE sucursal_id = ? AND activo = 1");
+                $bc->bind_param("i", $sid); $bc->execute();
+                $s['barberos_activos'] = $bc->get_result()->fetch_assoc()['t']; $bc->close();
+                // Citas este mes
+                $cc = $conn->prepare("SELECT COUNT(*) as t FROM citas WHERE sucursal_id = ? AND MONTH(fecha)=MONTH(NOW()) AND YEAR(fecha)=YEAR(NOW())");
+                $cc->bind_param("i", $sid); $cc->execute();
+                $s['citas_mes'] = $cc->get_result()->fetch_assoc()['t']; $cc->close();
+                // Citas hoy
+                $ch = $conn->prepare("SELECT COUNT(*) as t FROM citas WHERE sucursal_id = ? AND fecha = CURDATE()");
+                $ch->bind_param("i", $sid); $ch->execute();
+                $s['citas_hoy'] = $ch->get_result()->fetch_assoc()['t']; $ch->close();
+                // Servicios activos
+                $sc = $conn->prepare("SELECT COUNT(*) as t FROM servicios WHERE sucursal_id = ? AND activo = 1");
+                $sc->bind_param("i", $sid); $sc->execute();
+                $s['servicios_activos'] = $sc->get_result()->fetch_assoc()['t']; $sc->close();
+                // Suscripción + plan
+                $sub = $conn->prepare("SELECT su.*, p.nombre as plan_nombre, p.precio_mensual, p.max_barberos
+                    FROM suscripciones su JOIN planes p ON su.plan_id = p.id
+                    WHERE su.sucursal_id = ? ORDER BY su.id DESC LIMIT 1");
+                $sub->bind_param("i", $sid); $sub->execute();
+                $s['sub'] = $sub->get_result()->fetch_assoc(); $sub->close();
+                $shop_data[] = $s;
+            }
+            $proto_sa = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+            $base_sa  = $proto_sa . '://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']);
         ?>
 
         <div class="page-header">
             <h1 class="page-title">Gestión de <span>Tiendas</span></h1>
-            <p class="page-subtitle">Registro y administración de tiendas y sus administradores.</p>
+            <p class="page-subtitle">Registro, suscripciones y estado operativo de cada tienda.</p>
         </div>
 
-        <div class="grid-2">
-            <div class="card" style="align-self:start;margin-bottom:0">
+        <!-- KPIs TIENDAS -->
+        <?php
+            $total_shops = count($shop_data);
+            $shops_con_plan = 0; $shops_activas = 0; $shops_vencidas = 0; $shops_sin_plan = 0;
+            foreach ($shop_data as $sd) {
+                if (!$sd['sub']) { $shops_sin_plan++; continue; }
+                $shops_con_plan++;
+                $vence = new DateTime($sd['sub']['fecha_vencimiento']);
+                if ($sd['sub']['estado'] === 'activo' && $vence >= new DateTime()) $shops_activas++;
+                else $shops_vencidas++;
+            }
+        ?>
+        <div class="kpi-grid" style="margin-bottom:24px">
+            <div class="stat-card gold">
+                <div class="stat-label">Total Tiendas</div>
+                <div class="stat-value"><?php echo $total_shops; ?></div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Plan Activo</div>
+                <div class="stat-value"><?php echo $shops_activas; ?></div>
+            </div>
+            <div class="stat-card rose">
+                <div class="stat-label">Vencidas</div>
+                <div class="stat-value"><?php echo $shops_vencidas; ?></div>
+            </div>
+            <div class="stat-card blue">
+                <div class="stat-label">Sin Plan</div>
+                <div class="stat-value"><?php echo $shops_sin_plan; ?></div>
+            </div>
+        </div>
+
+        <!-- BOTÓN DE CONTROL -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px">
+            <h3 style="font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; color:#0f172a; margin:0">Listado de Sucursales</h3>
+            <button id="toggleFormBtn" onclick="toggleShopForm()" class="btn btn-gold"><i class="fas fa-plus"></i> Nueva Tienda</button>
+        </div>
+
+        <!-- FORMULARIO COLAPSABLE (Oculto por defecto) -->
+        <div id="suc-form-container" style="display:none; margin-bottom:24px; max-width: 500px;">
+            <div class="card" style="margin-bottom:0">
                 <div class="card-header" id="suc-form-title"><h3>Registrar Tienda</h3></div>
                 <div class="card-body">
                     <form action="../backend/processing/superadmin.php" method="POST">
@@ -588,66 +552,202 @@ $plan_colors = [
                     </form>
                 </div>
             </div>
-
-            <div class="card" style="margin-bottom:0">
-                <div class="card-header"><h3>Tiendas en el Sistema</h3></div>
-                <div class="table-wrap">
-                    <table>
-                        <thead><tr><th>Tienda</th><th>Administrador</th><th style="text-align:right">Acciones</th></tr></thead>
-                        <tbody>
-                        <?php if(empty($sucursales_arr)): ?>
-                        <tr><td colspan="3" style="text-align:center;padding:40px;color:#94a3b8">Sin tiendas registradas. Crea la primera con el formulario.</td></tr>
-                        <?php endif; ?>
-                        <?php foreach($sucursales_arr as $s):
-                            $adm = $admins_map[$s['id']] ?? null;
-                        ?>
-                        <tr>
-                            <td>
-                                <div style="font-weight:800"><?php echo htmlspecialchars($s['nombre']); ?></div>
-                                <div style="font-size:11px;color:#94a3b8;margin-top:2px"><?php echo htmlspecialchars($s['direccion'] ?? '—'); ?></div>
-                            </td>
-                            <td>
-                                <?php if ($adm): ?>
-                                <div style="font-weight:600;font-size:13px;color:#111827"><?php echo htmlspecialchars($adm['nombre']); ?></div>
-                                <div style="font-size:11px;color:#94a3b8;font-family:monospace">@<?php echo htmlspecialchars($adm['usuario']); ?></div>
-                                <?php else: ?>
-                                <span style="color:#94a3b8;font-size:12px;font-style:italic">Sin admin</span>
-                                <?php endif; ?>
-                            </td>
-                            <td style="text-align:right">
-                                <div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap">
-                                    <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>')" class="btn btn-ghost btn-sm">
-                                        <i class="fas fa-pen"></i> Tienda
-                                    </button>
-                                    <button onclick="openAdmForm(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>',<?php echo $adm ? $adm['id'] : 0; ?>,'<?php echo htmlspecialchars($adm['nombre']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['usuario']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['telefono']??'',ENT_QUOTES); ?>')"
-                                        class="btn btn-sm" style="background:<?php echo $adm?'#dbeafe':'#f0fdf4'; ?>;color:<?php echo $adm?'#1d4ed8':'#166534'; ?>;border:none;cursor:pointer;font-weight:600;font-size:12px;padding:5px 10px;border-radius:6px">
-                                        <i class="fas fa-<?php echo $adm?'user-pen':'user-plus'; ?>"></i> <?php echo $adm?'Admin':'+ Admin'; ?>
-                                    </button>
-                                    <?php if ($adm): ?>
-                                    <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Quitar el admin de esta tienda?')">
-                                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                                        <input type="hidden" name="action" value="delete_admin">
-                                        <input type="hidden" name="adm_id" value="<?php echo $adm['id']; ?>">
-                                        <button type="submit" class="btn btn-danger btn-sm" title="Quitar admin"><i class="fas fa-user-xmark"></i></button>
-                                    </form>
-                                    <?php endif; ?>
-                                    <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda?')">
-                                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                                        <input type="hidden" name="action" value="delete_sucursal">
-                                        <input type="hidden" name="id" value="<?php echo $s['id']; ?>">
-                                        <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </div>
 
-        <!-- FORMULARIO ADMIN (aparece al pulsar + Admin o Admin) -->
+        <!-- LISTA DE TIENDAS -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+                <?php if(empty($shop_data)): ?>
+                <div class="card" style="margin-bottom:0">
+                    <div style="text-align:center;padding:60px;color:#94a3b8">
+                        <i class="fas fa-store" style="font-size:40px;margin-bottom:12px;display:block;opacity:.4"></i>
+                        <p style="font-weight:700">Sin tiendas registradas.</p>
+                        <p style="font-size:13px;margin-top:4px">Crea la primera con el formulario.</p>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php foreach($shop_data as $s):
+                    $adm = $admins_map[$s['id']] ?? null;
+                    $url_cliente = $base_sa . '/cliente.php?t=' . ($s['token'] ?? '');
+                    $sub = $s['sub'];
+                    $hoy_dt = new DateTime();
+
+                    // Estado de suscripción
+                    if (!$sub) {
+                        $sub_status = 'none'; $sub_label = 'Sin plan'; $sub_color = '#64748b'; $sub_bg = '#f8fafc';
+                    } elseif ($sub['estado'] === 'suspendido') {
+                        $sub_status = 'suspended'; $sub_label = 'Suspendida'; $sub_color = '#d97706'; $sub_bg = '#fffbeb';
+                    } elseif ($sub['estado'] !== 'activo' || new DateTime($sub['fecha_vencimiento']) < $hoy_dt) {
+                        $sub_status = 'expired'; $sub_label = 'Vencida'; $sub_color = '#dc2626'; $sub_bg = '#fef2f2';
+                    } else {
+                        $sub_status = 'active'; $sub_label = 'Activa'; $sub_color = '#16a34a'; $sub_bg = '#f0fdf4';
+                    }
+
+                    // Días restantes
+                    $dias_rest = '';
+                    if ($sub && $sub_status === 'active') {
+                        $diff = $hoy_dt->diff(new DateTime($sub['fecha_vencimiento']))->days;
+                        $dias_rest = $diff . ' día' . ($diff!=1?'s':'');
+                    }
+
+                    // Uso de barberos
+                    $barb_uso = $s['barberos_activos'];
+                    $barb_max = $sub ? intval($sub['max_barberos']) : 0;
+                    $barb_txt = $barb_max > 0 ? "$barb_uso / $barb_max" : ($barb_max === 0 && $sub ? "$barb_uso / ∞" : "$barb_uso");
+                ?>
+                <div class="card" style="margin-bottom:0;overflow:visible">
+                    <!-- HEADER DE TIENDA -->
+                    <div style="padding:18px 20px;display:flex;align-items:flex-start;gap:16px;border-bottom:1px solid #f1f5f9">
+                        <!-- Icono -->
+                        <div style="width:48px;height:48px;border-radius:14px;background:<?php echo $sub_status==='active'?'#0f172a':($sub_status==='expired'?'#fef2f2':'#f8fafc'); ?>;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="fas fa-store" style="font-size:18px;color:<?php echo $sub_status==='active'?'#b49363':($sub_status==='expired'?'#ef4444':'#94a3b8'); ?>"></i>
+                        </div>
+                        <!-- Info -->
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                                <span style="font-size:16px;font-weight:900;color:#0f172a"><?php echo htmlspecialchars($s['nombre']); ?></span>
+                                <?php if ($sub): ?>
+                                <span style="font-size:10px;font-weight:900;padding:3px 10px;border-radius:2rem;background:<?php echo $sub_bg; ?>;color:<?php echo $sub_color; ?>;text-transform:uppercase;letter-spacing:.08em;display:inline-flex;align-items:center;gap:4px">
+                                    <span style="width:6px;height:6px;border-radius:50%;background:<?php echo $sub_color; ?>;<?php echo $sub_status==='active'?'animation:pulse 1.5s infinite':''; ?>"></span>
+                                    <?php echo $sub_label; ?>
+                                </span>
+                                <?php else: ?>
+                                <span style="font-size:10px;font-weight:900;padding:3px 10px;border-radius:2rem;background:#f8fafc;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em">Sin plan</span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ($s['direccion']): ?>
+                            <div style="font-size:12px;color:#64748b;margin-top:3px"><i class="fas fa-location-dot" style="margin-right:4px;font-size:10px;color:#94a3b8"></i><?php echo htmlspecialchars($s['direccion']); ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <!-- Acciones rápidas -->
+                        <div style="display:flex;gap:5px;flex-shrink:0">
+                            <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>')" class="btn btn-ghost btn-sm" title="Editar tienda"><i class="fas fa-pen"></i></button>
+                            <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda y toda su data?')">
+                                <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                <input type="hidden" name="action" value="delete_sucursal">
+                                <input type="hidden" name="id" value="<?php echo $s['id']; ?>">
+                                <button type="submit" class="btn btn-danger btn-sm" title="Eliminar"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- PLAN + STATS -->
+                    <div style="padding:16px 20px" class="shop-plan-stats">
+                        <!-- Plan info -->
+                        <div style="display:flex;flex-direction:column;gap:10px">
+                            <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.15em;color:#94a3b8">Suscripción</div>
+                            <?php if ($sub): ?>
+                            <div style="background:#0f172a;border-radius:.75rem;padding:12px 14px;color:white">
+                                <div style="display:flex;align-items:baseline;gap:6px">
+                                    <span style="font-size:15px;font-weight:900;font-style:italic"><?php echo htmlspecialchars($sub['plan_nombre']); ?></span>
+                                    <span style="font-size:12px;color:#b49363;font-weight:700">$<?php echo number_format($sub['precio_mensual'],2); ?>/mes</span>
+                                </div>
+                                <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
+                                    <div style="font-size:11px;color:rgba(255,255,255,.5);display:flex;justify-content:space-between">
+                                        <span><i class="fas fa-calendar-alt" style="margin-right:4px"></i>Inicio</span>
+                                        <span style="color:rgba(255,255,255,.7)"><?php echo date('d/m/Y', strtotime($sub['fecha_inicio'])); ?></span>
+                                    </div>
+                                    <div style="font-size:11px;color:rgba(255,255,255,.5);display:flex;justify-content:space-between">
+                                        <span><i class="fas fa-clock" style="margin-right:4px"></i>Vence</span>
+                                        <span style="color:<?php echo $sub_status==='active'?'rgba(255,255,255,.7)':'#fca5a5'; ?>"><?php echo date('d/m/Y', strtotime($sub['fecha_vencimiento'])); ?></span>
+                                    </div>
+                                    <?php if ($dias_rest): ?>
+                                    <div style="font-size:11px;color:#b49363;font-weight:700;text-align:right;margin-top:2px"><?php echo $dias_rest; ?> restantes</div>
+                                    <?php endif; ?>
+                                </div>
+                                <button onclick="openPlanForm(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>',<?php echo $sub['plan_id']; ?>,'<?php echo htmlspecialchars($sub['plan_nombre'],ENT_QUOTES); ?>')" style="width:100%;margin-top:8px;padding:6px;background:rgba(180,147,99,.2);border:none;border-radius:.5rem;font-size:10px;font-weight:800;color:#b49363;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">
+                                    <i class="fas fa-sync-alt" style="margin-right:4px"></i> Renovar / Cambiar
+                                </button>
+                            </div>
+                            <?php else: ?>
+                            <div style="background:#f8fafc;border:1.5px dashed #e2e8f0;border-radius:.75rem;padding:14px;text-align:center;color:#94a3b8">
+                                <i class="fas fa-layer-group" style="font-size:18px;margin-bottom:6px;display:block;opacity:.5"></i>
+                                <div style="font-size:12px;font-weight:700">Sin suscripción</div>
+                                <button onclick="openPlanForm(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>',0,'')" class="btn btn-dark btn-sm" style="margin-top:8px;width:100%;justify-content:center"><i class="fas fa-plus"></i> Asignar plan</button>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Stats grid -->
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:.625rem;padding:10px 12px;text-align:center">
+                                <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8">Barberos</div>
+                                <div style="font-size:18px;font-weight:900;color:#0f172a;margin-top:2px"><?php echo $barb_txt; ?></div>
+                                <?php if ($barb_max > 0 && $barb_uso >= $barb_max): ?>
+                                <div style="font-size:9px;color:#dc2626;font-weight:700;margin-top:2px">Límite</div>
+                                <?php endif; ?>
+                            </div>
+                            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:.625rem;padding:10px 12px;text-align:center">
+                                <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8">Servicios</div>
+                                <div style="font-size:18px;font-weight:900;color:#0f172a;margin-top:2px"><?php echo $s['servicios_activos']; ?></div>
+                            </div>
+                            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:.625rem;padding:10px 12px;text-align:center">
+                                <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8">Citas Hoy</div>
+                                <div style="font-size:18px;font-weight:900;color:#0f172a;margin-top:2px"><?php echo $s['citas_hoy']; ?></div>
+                            </div>
+                            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:.625rem;padding:10px 12px;text-align:center">
+                                <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8">Citas/Mes</div>
+                                <div style="font-size:18px;font-weight:900;color:#0f172a;margin-top:2px"><?php echo $s['citas_mes']; ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ADMIN + ENLACE -->
+                    <div style="padding:0 20px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <!-- Admin -->
+                        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:160px">
+                            <?php if ($adm): ?>
+                            <div style="width:32px;height:32px;border-radius:50%;background:#e0e7ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0">
+                                <?php echo strtoupper(mb_substr($adm['nombre'],0,2)); ?>
+                            </div>
+                            <div>
+                                <div style="font-size:12px;font-weight:800;color:#0f172a"><?php echo htmlspecialchars($adm['nombre']); ?></div>
+                                <div style="font-size:10px;color:#94a3b8;font-family:monospace">@<?php echo htmlspecialchars($adm['usuario']); ?></div>
+                            </div>
+                            <?php else: ?>
+                            <div style="width:32px;height:32px;border-radius:50%;background:#f1f5f9;color:#94a3b8;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">
+                                <i class="fas fa-user-slash"></i>
+                            </div>
+                            <span style="font-size:12px;color:#94a3b8;font-style:italic">Sin admin asignado</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Botones admin -->
+                        <button onclick="openAdmForm(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>',<?php echo $adm ? $adm['id'] : 0; ?>,'<?php echo htmlspecialchars($adm['nombre']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['usuario']??'',ENT_QUOTES); ?>','<?php echo htmlspecialchars($adm['telefono']??'',ENT_QUOTES); ?>')"
+                            class="btn btn-sm" style="background:<?php echo $adm?'#e0e7ff':'#f0fdf4'; ?>;color:<?php echo $adm?'#4f46e5':'#16a34a'; ?>;border:none;cursor:pointer">
+                            <i class="fas fa-<?php echo $adm?'user-pen':'user-plus'; ?>"></i> <?php echo $adm?'Editar admin':'Asignar admin'; ?>
+                        </button>
+                        <?php if ($adm): ?>
+                        <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Quitar el admin?')">
+                            <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                            <input type="hidden" name="action" value="delete_admin">
+                            <input type="hidden" name="adm_id" value="<?php echo $adm['id']; ?>">
+                            <button type="submit" class="btn btn-danger btn-sm" title="Quitar admin"><i class="fas fa-user-xmark"></i></button>
+                        </form>
+                        <?php endif; ?>
+
+                        <!-- Enlaces -->
+                        <div style="margin-left:auto;display:flex;align-items:center;gap:5px">
+                            <a href="admin.php?suc=<?php echo $s['id']; ?>" class="btn btn-sm" style="background:#b49363;color:white;border:none;text-decoration:none" title="Ver panel admin de esta tienda">
+                                <i class="fas fa-columns"></i> Panel
+                            </a>
+                            <?php if (!empty($s['token'])): ?>
+                            <button onclick="copyUrl('<?php echo htmlspecialchars($url_cliente, ENT_QUOTES); ?>', this)" title="Copiar enlace de reservas"
+                                style="background:#0f172a;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:10px;font-weight:800;color:white;display:flex;align-items:center;gap:4px">
+                                <i class="fas fa-link"></i> Reservas
+                            </button>
+                            <a href="<?php echo htmlspecialchars($url_cliente); ?>" target="_blank"
+                                style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;color:#2563eb;text-decoration:none;display:flex;align-items:center">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+        <!-- FORMULARIO ADMIN (aparece al pulsar + Admin o Editar admin) -->
         <div id="admFormWrap" style="display:none;margin-top:24px;">
             <div class="card" style="max-width:480px">
                 <div class="card-header"><h3 id="admFormTitle">Asignar Administrador</h3></div>
@@ -686,7 +786,79 @@ $plan_colors = [
             </div>
         </div>
 
+        <!-- MODAL ASIGNAR/RENOVAR PLAN -->
+        <div id="planFormWrap" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);align-items:center;justify-content:center">
+            <div style="background:#fff;border-radius:1rem;padding:28px;width:100%;max-width:420px;margin:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);position:relative;max-height:90vh;overflow-y:auto">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+                    <h3 id="planFormTitle" style="font-size:15px;font-weight:800;color:#0f172a">Asignar Plan</h3>
+                    <button onclick="closePlanForm()" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;padding:4px"><i class="fas fa-times"></i></button>
+                </div>
+                <form action="../backend/processing/superadmin.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                    <input type="hidden" name="action" value="assign_plan">
+                    <input type="hidden" id="pf_sucursal" name="sub_sucursal" value="">
+                    <div class="form-group">
+                        <label class="form-label">Tienda</label>
+                        <input type="text" id="pf_tienda_lbl" class="form-input" disabled style="background:#f9fafb;color:#6b7280">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Plan</label>
+                        <select id="pf_plan" name="sub_plan" class="form-select" required>
+                            <option value="">— Seleccionar plan —</option>
+                            <?php foreach($planes_arr as $p): ?>
+                            <option value="<?php echo $p['id']; ?>"><?php echo htmlspecialchars($p['nombre']); ?> — $<?php echo number_format($p['precio_mensual'],2); ?>/mes</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Fecha inicio</label>
+                            <input type="date" name="sub_inicio" class="form-input" value="<?php echo date('Y-m-d'); ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Vencimiento</label>
+                            <input type="date" name="sub_fin" class="form-input" value="<?php echo date('Y-m-d', strtotime('+1 month')); ?>" required>
+                        </div>
+                    </div>
+                    <div style="border-top:1px solid #f1f5f9;margin-top:8px;padding-top:14px">
+                        <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.15em;color:#94a3b8;margin-bottom:10px"><i class="fas fa-credit-card" style="margin-right:4px"></i> Datos del pago</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Método</label>
+                                <select name="pago_metodo" class="form-select" required>
+                                    <option>Zelle</option>
+                                    <option>Efectivo</option>
+                                    <option>Transferencia</option>
+                                    <option>PayPal</option>
+                                    <option>Otro</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Referencia</label>
+                                <input type="text" name="pago_referencia" class="form-input" placeholder="N° transacción">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Notas (opcional)</label>
+                            <input type="text" name="pago_notas" class="form-input" placeholder="Observaciones">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-gold" style="width:100%;justify-content:center;margin-top:8px"><i class="fas fa-check"></i> Activar y registrar pago</button>
+                </form>
+            </div>
+        </div>
+
         <script>
+        function openPlanForm(suc_id, suc_nombre, plan_id, plan_nombre) {
+            document.getElementById('pf_sucursal').value = suc_id;
+            document.getElementById('pf_tienda_lbl').value = suc_nombre;
+            document.getElementById('pf_plan').value = plan_id || '';
+            document.getElementById('planFormTitle').textContent = plan_id ? 'Renovar Plan — ' + suc_nombre : 'Asignar Plan — ' + suc_nombre;
+            document.getElementById('planFormWrap').style.display = 'flex';
+        }
+        function closePlanForm() { document.getElementById('planFormWrap').style.display = 'none'; }
+        document.getElementById('planFormWrap').addEventListener('click', function(e) { if (e.target === this) closePlanForm(); });
+
         function openAdmForm(suc_id, suc_nombre, adm_id, adm_nombre, adm_usuario, adm_telefono) {
             document.getElementById('af_sucursal').value   = suc_id;
             document.getElementById('af_tienda_lbl').value = suc_nombre;
@@ -713,13 +885,43 @@ $plan_colors = [
         function closeAdmForm() {
             document.getElementById('admFormWrap').style.display = 'none';
         }
+        function copyUrl(url, btn) {
+            navigator.clipboard.writeText(url).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copiado';
+                btn.style.background = '#16a34a';
+                setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#0f172a'; }, 2000);
+            });
+        }
+        function toggleShopForm() {
+            const container = document.getElementById('suc-form-container');
+            const btn = document.getElementById('toggleFormBtn');
+            if (container.style.display === 'none' || container.style.display === '') {
+                container.style.display = 'block';
+                btn.innerHTML = '<i class="fas fa-times"></i> Cerrar Formulario';
+                btn.style.background = '#64748b';
+            } else {
+                container.style.display = 'none';
+                btn.innerHTML = '<i class="fas fa-plus"></i> Nueva Tienda';
+                btn.style.background = '#b49363';
+                resetSucForm();
+            }
+        }
         function editSuc(id,nombre,dir){
             document.getElementById('shop_id').value=id;
             document.getElementById('shop_name').value=nombre;
             document.getElementById('shop_address').value=dir;
             document.getElementById('shop_action').value='edit_sucursal';
             document.querySelector('#suc-form-title h3').textContent='Editar Tienda';
+            
+            const container = document.getElementById('suc-form-container');
+            const btn = document.getElementById('toggleFormBtn');
+            container.style.display = 'block';
+            btn.innerHTML = '<i class="fas fa-times"></i> Cerrar Formulario';
+            btn.style.background = '#64748b';
+            
             document.getElementById('shop_name').focus();
+            window.scrollTo({top: container.offsetTop - 100, behavior: 'smooth'});
         }
         function resetSucForm(){
             document.getElementById('shop_id').value='';
@@ -727,6 +929,12 @@ $plan_colors = [
             document.getElementById('shop_address').value='';
             document.getElementById('shop_action').value='add_sucursal';
             document.querySelector('#suc-form-title h3').textContent='Registrar Tienda';
+            
+            const container = document.getElementById('suc-form-container');
+            const btn = document.getElementById('toggleFormBtn');
+            container.style.display = 'none';
+            btn.innerHTML = '<i class="fas fa-plus"></i> Nueva Tienda';
+            btn.style.background = '#b49363';
         }
         </script>
 
@@ -754,15 +962,10 @@ $plan_colors = [
                             <label class="form-label">Precio Mensual ($)</label>
                             <input type="number" id="plan_precio" name="plan_precio" class="form-input" placeholder="0.00" step="0.01" min="0" required>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label">Máx. Barberos</label>
-                                <input type="number" id="plan_max_barberos" name="plan_max_barberos" class="form-input" value="3" min="1" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Máx. Citas/mes</label>
-                                <input type="number" id="plan_max_citas" name="plan_max_citas" class="form-input" value="100" min="1" required>
-                            </div>
+                        <div class="form-group">
+                            <label class="form-label">Máx. Barberos</label>
+                            <input type="number" id="plan_max_barberos" name="plan_max_barberos" class="form-input" value="1" min="0" required>
+                            <small style="color:#94a3b8;font-size:10px">0 = ilimitado · Planes con 2+ barberos incluyen Club VIP, colores e imágenes</small>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Descripción</label>
@@ -784,34 +987,41 @@ $plan_colors = [
                         <p style="font-size:13px;margin-top:4px">Crea el primero con el formulario.</p>
                     </div>
                 <?php else: ?>
-                <?php $pi=0; foreach($planes_arr as $plan): $pc=$plan_colors[$pi%3]; $pi++; ?>
-                <!-- Dark plan card al-turno style -->
-                <div class="plan-dark-card" style="margin-bottom:16px">
+                <div class="planes-grid">
+                <?php foreach($planes_arr as $plan): ?>
+                <div class="plan-dark-card">
                     <div class="plan-dark-actions">
-                        <button onclick="editPlan(<?php echo htmlspecialchars(json_encode($plan),ENT_QUOTES); ?>)" class="btn btn-ghost btn-sm" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.15)">
-                            <i class="fas fa-pen"></i>
+                        <button onclick="editPlan(<?php echo htmlspecialchars(json_encode($plan),ENT_QUOTES); ?>)" class="btn btn-ghost btn-sm" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.15);padding:3px 7px">
+                            <i class="fas fa-pen" style="font-size:10px"></i>
                         </button>
                         <form action="../backend/processing/superadmin.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar plan?')">
                             <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                             <input type="hidden" name="action" value="delete_plan">
                             <input type="hidden" name="id" value="<?php echo $plan['id']; ?>">
-                            <button type="submit" class="btn btn-danger btn-sm" style="background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.2)">
-                                <i class="fas fa-trash"></i>
+                            <button type="submit" class="btn btn-sm" style="background:rgba(239,68,68,.15);color:#fca5a5;border:none;padding:3px 7px;cursor:pointer;border-radius:6px">
+                                <i class="fas fa-trash" style="font-size:10px"></i>
                             </button>
                         </form>
                     </div>
-                    <div class="plan-dark-label">Plan de Suscripción</div>
                     <div class="plan-dark-name"><?php echo htmlspecialchars($plan['nombre']); ?></div>
-                    <div class="plan-dark-price">$<?php echo number_format($plan['precio_mensual'],2); ?><span style="font-size:13px;color:#94a3b8;font-family:Inter,sans-serif;font-weight:500">/mes</span></div>
+                    <div class="plan-dark-price">$<?php echo number_format($plan['precio_mensual'],2); ?><span>/mes</span></div>
                     <div class="plan-dark-features">
-                        <div class="plan-dark-feature"><i class="fas fa-check-circle"></i> Hasta <?php echo $plan['max_barberos']; ?> barberos activos</div>
-                        <div class="plan-dark-feature"><i class="fas fa-check-circle"></i> <?php echo number_format($plan['max_citas_mes']); ?> citas por mes</div>
+                        <div class="plan-dark-feature"><i class="fas fa-scissors"></i> <?php echo $plan['max_barberos'] > 0 ? $plan['max_barberos'] . ' barbero' . ($plan['max_barberos']>1?'s':'') : 'Barberos ilimitados'; ?></div>
+                        <?php
+                            $nivel = intval($plan['nivel'] ?? 1);
+                            $nivel_labels = [1=>'Básico', 2=>'Profesional', 3=>'Pro'];
+                            $nivel_features = $nivel >= 2 ? 'VIP · Colores · Imágenes' : 'Funciones esenciales';
+                        ?>
+                        <div class="plan-dark-feature"><i class="fas fa-star"></i> Nivel <?php echo $nivel; ?> — <?php echo $nivel_labels[$nivel] ?? 'Básico'; ?></div>
+                        <div class="plan-dark-feature"><i class="fas fa-check-circle"></i> <?php echo $nivel_features; ?></div>
                         <?php if($plan['descripcion']): ?>
-                        <div class="plan-dark-feature" style="margin-top:4px;color:rgba(255,255,255,.4)"><i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($plan['descripcion']); ?></div>
+                        <div class="plan-dark-feature" style="color:rgba(255,255,255,.35)"><i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($plan['descripcion']); ?></div>
                         <?php endif; ?>
                     </div>
                 </div>
-                <?php endforeach; endif; ?>
+                <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
         <script>
@@ -820,7 +1030,6 @@ $plan_colors = [
             document.getElementById('plan_nombre').value=p.nombre;
             document.getElementById('plan_precio').value=p.precio_mensual;
             document.getElementById('plan_max_barberos').value=p.max_barberos;
-            document.getElementById('plan_max_citas').value=p.max_citas_mes;
             document.getElementById('plan_descripcion').value=p.descripcion||'';
             document.getElementById('plan_action').value='edit_plan';
             document.querySelector('#plan-form-title h3').textContent='Editar Plan';
@@ -830,8 +1039,7 @@ $plan_colors = [
             document.getElementById('plan_id').value='';
             document.getElementById('plan_nombre').value='';
             document.getElementById('plan_precio').value='';
-            document.getElementById('plan_max_barberos').value='3';
-            document.getElementById('plan_max_citas').value='100';
+            document.getElementById('plan_max_barberos').value='1';
             document.getElementById('plan_descripcion').value='';
             document.getElementById('plan_action').value='add_plan';
             document.querySelector('#plan-form-title h3').textContent='Crear Plan';
@@ -906,13 +1114,11 @@ $plan_colors = [
                     <?php
                     $exp = $conn->query("SELECT s.*, sub.plan_id, sub.fecha_vencimiento, sub.estado as sub_estado,
                         pl.nombre as plan_nombre, pl.precio_mensual,
-                        COALESCE(SUM(p.monto),0) as total_pagado
+                        (SELECT COALESCE(SUM(p.monto),0) FROM pagos_suscripcion p WHERE p.sucursal_id = s.id) as total_pagado
                         FROM sucursales s
                         LEFT JOIN suscripciones sub ON sub.sucursal_id = s.id
                         LEFT JOIN planes pl ON pl.id = sub.plan_id
-                        LEFT JOIN pagos_suscripcion p ON p.sucursal_id = s.id
                         WHERE s.id > 1
-                        GROUP BY s.id
                         ORDER BY s.nombre");
                     if ($exp && $exp->num_rows > 0):
                         $pi2=0;
@@ -964,67 +1170,8 @@ $plan_colors = [
             </div>
         </div>
 
-        <!-- REGISTRAR PAGO + HISTORIAL -->
-        <div class="grid-2" style="margin-top:24px">
-            <div class="card" style="align-self:start;margin-bottom:0">
-                <div class="card-header"><h3>Registrar Pago</h3></div>
-                <div class="card-body">
-                    <form action="../backend/processing/superadmin.php" method="POST">
-                        <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
-                        <input type="hidden" name="action" value="add_pago">
-                        <div class="form-group">
-                            <label class="form-label">Tienda</label>
-                            <select name="pago_sucursal" class="form-select" required>
-                                <option value="">— Seleccionar —</option>
-                                <?php foreach($sucursales_arr as $s): ?>
-                                <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['nombre']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Plan (opcional)</label>
-                            <select name="pago_plan" class="form-select">
-                                <option value="">— Sin plan específico —</option>
-                                <?php foreach($planes_arr as $p): ?>
-                                <option value="<?php echo $p['id']; ?>"><?php echo htmlspecialchars($p['nombre']); ?> — $<?php echo number_format($p['precio_mensual'],2); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label">Monto ($)</label>
-                                <input type="number" name="pago_monto" class="form-input" placeholder="0.00" step="0.01" min="0" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Fecha</label>
-                                <input type="date" name="pago_fecha" class="form-input" value="<?php echo date('Y-m-d'); ?>" required>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Método de Pago</label>
-                            <select name="pago_metodo" class="form-select" required>
-                                <option>Zelle</option>
-                                <option>Efectivo</option>
-                                <option>Transferencia</option>
-                                <option>PayPal</option>
-                                <option>Otro</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Referencia</label>
-                            <input type="text" name="pago_referencia" class="form-input" placeholder="N° de transacción">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Notas</label>
-                            <textarea name="pago_notas" class="form-textarea" placeholder="Observaciones adicionales" style="min-height:56px"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-dark btn-full">
-                            <i class="fas fa-plus"></i> Registrar Pago
-                        </button>
-                    </form>
-                </div>
-            </div>
-
+        <!-- HISTORIAL DE PAGOS -->
+        <div style="margin-top:24px">
             <div class="card" style="margin-bottom:0">
                 <div class="card-header">
                     <h3>Historial de Pagos</h3>
@@ -1097,6 +1244,125 @@ $plan_colors = [
                 </form>
             </div>
         </div>
+        <!-- ══════════════ USUARIOS ══════════════ -->
+        <?php elseif($page == 'usuarios'): ?>
+
+        <div class="page-header">
+            <h1 class="page-title">Gestión de <span>Usuarios</span></h1>
+            <p class="page-subtitle">Administra los usuarios del sistema.</p>
+        </div>
+
+        <?php if($edit_user): ?>
+        <div class="card" style="max-width:640px">
+            <div class="card-header"><h3>Editar Usuario</h3></div>
+            <div class="card-body">
+                <form action="../backend/processing/usuarios.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                    <input type="hidden" name="action" value="editar_usuario">
+                    <input type="hidden" name="id" value="<?php echo $edit_user['id']; ?>">
+                    <div class="form-group">
+                        <label class="form-label">Nombre Completo *</label>
+                        <input type="text" name="nombre" value="<?php echo htmlspecialchars($edit_user['nombre']); ?>" required class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nombre de Usuario</label>
+                        <input type="text" value="<?php echo htmlspecialchars($edit_user['usuario']); ?>" readonly class="form-input" style="background:#f8fafc;color:#94a3b8">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Contraseña (dejar en blanco para mantener)</label>
+                        <input type="password" name="password" class="form-input">
+                        <small style="color:#94a3b8;font-size:11px">Mínimo 8 caracteres</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Teléfono</label>
+                        <input type="tel" name="telefono" value="<?php echo htmlspecialchars($edit_user['telefono'] ?? ''); ?>" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rol *</label>
+                        <select name="rol" id="urol" onchange="toggleSucursal()" required class="form-select">
+                            <option value="superadmin" <?php echo $edit_user['rol']=='superadmin'?'selected':''; ?>>SuperAdmin</option>
+                            <option value="admin" <?php echo $edit_user['rol']=='admin'?'selected':''; ?>>Admin</option>
+                            <option value="gerente" <?php echo $edit_user['rol']=='gerente'?'selected':''; ?>>Gerente de Tienda</option>
+                            <option value="barbero" <?php echo $edit_user['rol']=='barbero'?'selected':''; ?>>Barbero</option>
+                            <option value="cliente" <?php echo $edit_user['rol']=='cliente'?'selected':''; ?>>Cliente</option>
+                        </select>
+                    </div>
+                    <div id="field_sucursal_u" class="form-group" style="display:none;">
+                        <label class="form-label">Tienda *</label>
+                        <select name="sucursal_id" class="form-select">
+                            <option value="">Selecciona tienda</option>
+                            <?php foreach($sucursales_arr as $suc):
+                                $sel = ($edit_user['sucursal_id'] == $suc['id']) ? 'selected' : '';
+                            ?>
+                            <option value="<?php echo $suc['id']; ?>" <?php echo $sel; ?>><?php echo htmlspecialchars($suc['nombre']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:20px">
+                        <button type="submit" class="btn btn-gold"><i class="fas fa-save"></i> Actualizar</button>
+                        <a href="superadmin.php?page=usuarios" class="btn btn-ghost">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+        function toggleSucursal(){
+            const r=document.getElementById('urol').value;
+            document.getElementById('field_sucursal_u').style.display=['admin','gerente','barbero'].includes(r)?'block':'none';
+        }
+        toggleSucursal();
+        </script>
+
+        <?php else: ?>
+        <div class="card">
+            <div class="card-header"><h3>Listado de Usuarios</h3></div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>Nombre</th>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Tienda</th>
+                        <th style="text-align:right">Acciones</th>
+                    </tr></thead>
+                    <tbody>
+                    <?php
+                    $users = $conn->query("SELECT u.*, COALESCE(s.nombre, sb.nombre) as sucursal_nombre FROM usuarios u LEFT JOIN sucursales s ON u.sucursal_id = s.id LEFT JOIN barberos b ON u.barbero_id = b.id LEFT JOIN sucursales sb ON b.sucursal_id = sb.id ORDER BY u.rol ASC, COALESCE(s.nombre, sb.nombre) ASC, u.nombre ASC");
+                    if ($users && $users->num_rows > 0):
+                        while ($u = $users->fetch_assoc()):
+                    ?>
+                    <tr>
+                        <td style="font-weight:700"><?php echo htmlspecialchars($u['nombre']); ?></td>
+                        <td style="font-family:monospace;color:#64748b"><?php echo htmlspecialchars($u['usuario']); ?></td>
+                        <td>
+                            <?php
+                            $rol_colors = ['superadmin'=>'#7c3aed','admin'=>'#2563eb','gerente'=>'#d97706','barbero'=>'#059669','cliente'=>'#64748b'];
+                            $rc = $rol_colors[$u['rol']] ?? '#64748b';
+                            ?>
+                            <span style="font-size:10px;font-weight:900;padding:3px 8px;border-radius:2rem;background:<?php echo $rc; ?>22;color:<?php echo $rc; ?>;text-transform:uppercase;letter-spacing:.08em"><?php echo $u['rol']; ?></span>
+                        </td>
+                        <td style="color:#64748b"><?php echo htmlspecialchars($u['sucursal_nombre'] ?? '—'); ?></td>
+                        <td style="text-align:right">
+                            <a href="superadmin.php?page=usuarios&id=<?php echo $u['id']; ?>" class="action-btn"><i class="fas fa-pen"></i> Editar</a>
+                            <?php if ($u['id'] != $_SESSION['user_id']): ?>
+                            <form action="../backend/processing/usuarios.php" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este usuario?')">
+                                <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
+                                <input type="hidden" name="action" value="eliminar_usuario">
+                                <input type="hidden" name="id" value="<?php echo $u['id']; ?>">
+                                <button type="submit" class="action-btn" style="background:#fef2f2;color:#ef4444;border-color:#fecaca"><i class="fas fa-trash"></i> Eliminar</button>
+                            </form>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endwhile; else: ?>
+                    <tr><td colspan="5" style="text-align:center;padding:40px;color:#94a3b8">Sin usuarios registrados</td></tr>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <?php endif; ?>
 
     </div><!-- /content -->
@@ -1104,8 +1370,35 @@ $plan_colors = [
 </div><!-- /layout -->
 
 <script>
-const btn = document.getElementById('menuBtn');
-if(btn && window.innerWidth<=640) btn.style.display='block';
+const menuBtn = document.getElementById('menuBtn');
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+
+if (menuBtn && sidebar && overlay) {
+    if (window.innerWidth <= 900) {
+        menuBtn.style.display = 'inline-flex';
+    }
+    
+    menuBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('active');
+    });
+
+    overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+    });
+    
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 900) {
+            menuBtn.style.display = 'none';
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        } else {
+            menuBtn.style.display = 'inline-flex';
+        }
+    });
+}
 </script>
 </body>
 </html>

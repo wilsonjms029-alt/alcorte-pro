@@ -13,10 +13,11 @@ $action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 if ($action == 'add_sucursal') {
     if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
     csrf_regenerate();
-    $nombre = trim($_POST['shop_name']);
+    $nombre    = trim($_POST['shop_name']);
     $direccion = trim($_POST['shop_address']);
-    $stmt = $conn->prepare("INSERT INTO sucursales (nombre, direccion) VALUES (?, ?)");
-    $stmt->bind_param("ss", $nombre, $direccion);
+    $token     = bin2hex(random_bytes(16));
+    $stmt = $conn->prepare("INSERT INTO sucursales (nombre, direccion, token) VALUES (?, ?, ?)");
+    $stmt->bind_param("sss", $nombre, $direccion, $token);
     $stmt->execute();
     $stmt->close();
     header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Tienda+registrada+con+éxito");
@@ -41,7 +42,6 @@ if ($action == 'delete_sucursal') {
     if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
     csrf_regenerate();
     $id = intval($_POST['id']);
-    if ($id === 1) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Esa+tienda+no+se+puede+eliminar"); exit; }
     $stmt = $conn->prepare("DELETE FROM sucursales WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
@@ -57,10 +57,10 @@ if ($action == 'add_plan') {
     $nombre        = trim($_POST['plan_nombre']);
     $precio        = floatval($_POST['plan_precio']);
     $max_barberos  = intval($_POST['plan_max_barberos']);
-    $max_citas     = intval($_POST['plan_max_citas']);
+    $nivel         = ($max_barberos === 1) ? 1 : (($max_barberos > 1 && $max_barberos <= 10) ? 2 : 3);
     $descripcion   = trim($_POST['plan_descripcion']);
-    $stmt = $conn->prepare("INSERT INTO planes (nombre, precio_mensual, max_barberos, max_citas_mes, descripcion) VALUES (?, ?, ?, ?, ?)");
-    $stmt->bind_param("sdiis", $nombre, $precio, $max_barberos, $max_citas, $descripcion);
+    $stmt = $conn->prepare("INSERT INTO planes (nombre, precio_mensual, max_barberos, nivel, descripcion) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("sdiis", $nombre, $precio, $max_barberos, $nivel, $descripcion);
     $stmt->execute();
     $stmt->close();
     header("Location: ../../frontend/superadmin.php?page=planes&msg=Plan+creado+con+éxito");
@@ -74,10 +74,10 @@ if ($action == 'edit_plan') {
     $nombre        = trim($_POST['plan_nombre']);
     $precio        = floatval($_POST['plan_precio']);
     $max_barberos  = intval($_POST['plan_max_barberos']);
-    $max_citas     = intval($_POST['plan_max_citas']);
+    $nivel         = ($max_barberos === 1) ? 1 : (($max_barberos > 1 && $max_barberos <= 10) ? 2 : 3);
     $descripcion   = trim($_POST['plan_descripcion']);
-    $stmt = $conn->prepare("UPDATE planes SET nombre=?, precio_mensual=?, max_barberos=?, max_citas_mes=?, descripcion=? WHERE id=?");
-    $stmt->bind_param("sdiisi", $nombre, $precio, $max_barberos, $max_citas, $descripcion, $id);
+    $stmt = $conn->prepare("UPDATE planes SET nombre=?, precio_mensual=?, max_barberos=?, nivel=?, descripcion=? WHERE id=?");
+    $stmt->bind_param("sdiisi", $nombre, $precio, $max_barberos, $nivel, $descripcion, $id);
     $stmt->execute();
     $stmt->close();
     header("Location: ../../frontend/superadmin.php?page=planes&msg=Plan+actualizado");
@@ -103,6 +103,13 @@ if ($action == 'add_pago') {
     $sucursal_id = intval($_POST['pago_sucursal']);
     $plan_id     = intval($_POST['pago_plan']) ?: null;
     $monto       = floatval($_POST['pago_monto']);
+    if ($monto <= 0 && $plan_id) {
+        $pm = $conn->prepare("SELECT precio_mensual FROM planes WHERE id = ?");
+        $pm->bind_param("i", $plan_id); $pm->execute();
+        $pr = $pm->get_result()->fetch_assoc();
+        if ($pr) $monto = floatval($pr['precio_mensual']);
+        $pm->close();
+    }
     $fecha       = trim($_POST['pago_fecha']);
     $metodo      = trim($_POST['pago_metodo']);
     $referencia  = trim($_POST['pago_referencia']);
@@ -130,22 +137,36 @@ if ($action == 'delete_pago') {
 
 // --- SUSCRIPCIONES ---
 if ($action == 'assign_plan') {
-    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=estadisticas&msg=Error+de+seguridad"); exit; }
+    if (!csrf_validate()) { header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Error+de+seguridad"); exit; }
     csrf_regenerate();
     $sucursal_id = intval($_POST['sub_sucursal']);
     $plan_id     = intval($_POST['sub_plan']);
     $inicio      = trim($_POST['sub_inicio']);
     $fin         = trim($_POST['sub_fin']);
-    // Una sucursal tiene una sola suscripción activa: reemplazar la anterior.
+    $pago_metodo = trim($_POST['pago_metodo'] ?? 'Efectivo');
+    $pago_ref    = trim($_POST['pago_referencia'] ?? '');
+    $pago_notas  = trim($_POST['pago_notas'] ?? '');
+    $user_id     = $_SESSION['user_id'];
+
     $d = $conn->prepare("DELETE FROM suscripciones WHERE sucursal_id = ?");
-    $d->bind_param("i", $sucursal_id);
-    $d->execute();
-    $d->close();
+    $d->bind_param("i", $sucursal_id); $d->execute(); $d->close();
+
     $stmt = $conn->prepare("INSERT INTO suscripciones (sucursal_id, plan_id, fecha_inicio, fecha_vencimiento, estado) VALUES (?, ?, ?, ?, 'activo')");
     $stmt->bind_param("iiss", $sucursal_id, $plan_id, $inicio, $fin);
-    $stmt->execute();
-    $stmt->close();
-    header("Location: ../../frontend/superadmin.php?page=estadisticas&msg=Suscripción+asignada+correctamente");
+    $stmt->execute(); $stmt->close();
+
+    // Registrar pago automáticamente
+    $pm = $conn->prepare("SELECT precio_mensual FROM planes WHERE id = ?");
+    $pm->bind_param("i", $plan_id); $pm->execute();
+    $plan_row = $pm->get_result()->fetch_assoc(); $pm->close();
+    $monto = $plan_row ? floatval($plan_row['precio_mensual']) : 0;
+    if ($monto > 0) {
+        $sp = $conn->prepare("INSERT INTO pagos_suscripcion (sucursal_id, plan_id, monto, fecha_pago, metodo, referencia, notas, registrado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $sp->bind_param("iidssssi", $sucursal_id, $plan_id, $monto, $inicio, $pago_metodo, $pago_ref, $pago_notas, $user_id);
+        $sp->execute(); $sp->close();
+    }
+
+    header("Location: ../../frontend/superadmin.php?page=barbershops&msg=Plan+asignado+y+pago+registrado");
     exit;
 }
 

@@ -2,6 +2,10 @@
 // La configuración central gestiona errores, conexión y sesión.
 require_once './backend/config/config.php';
 
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 $error = "";
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -16,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } else {
         // CSRF validation
         if (!csrf_validate()) {
+            error_log("CSRF Mismatch: POST=" . ($_POST['csrf_token'] ?? 'NULL') . " | SESSION=" . ($_SESSION['csrf_token'] ?? 'NULL'));
             $error = "Token de seguridad inválido. Recarga la página.";
         } else {
             csrf_regenerate();
@@ -49,17 +54,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             if ($user['rol'] == 'superadmin') { header("Location: ./frontend/superadmin.php"); exit; }
                             if ($user['rol'] == 'admin') { header("Location: ./frontend/admin.php"); exit; }
                             if ($user['rol'] == 'gerente') { header("Location: ./frontend/admin.php"); exit; }
-                            if ($user['rol'] == 'barbero') { header("Location: ./frontend/barbero.php"); exit; }
+                            if ($user['rol'] == 'barbero') {
+                                $suc_id = intval($user['sucursal_id'] ?? 0);
+                                $plan_activo = get_plan_sucursal($conn, $suc_id);
+                                $is_basic_plan = $plan_activo ? ($plan_activo['nombre'] === 'Básico') : false;
+                                if ($is_basic_plan) {
+                                    session_destroy();
+                                    $error = "El plan básico no incluye acceso al panel de barbero.";
+                                } else {
+                                    header("Location: ./frontend/barbero.php");
+                                    exit;
+                                }
+                            }
                             if ($user['rol'] == 'cliente') { header("Location: ./frontend/cliente.php"); exit; }
                         } else {
                             $_SESSION['login_attempts']++;
                             $_SESSION['login_last_attempt'] = time();
-                            $error = "Contraseña incorrecta para el usuario ingresado.";
+                            $error = "Usuario o contraseña incorrectos.";
                         }
                     } else {
                         $_SESSION['login_attempts']++;
                         $_SESSION['login_last_attempt'] = time();
-                        $error = "El usuario '" . htmlspecialchars($usuario) . "' no existe en la base de datos.";
+                        $error = "Usuario o contraseña incorrectos.";
                     }
                     $stmt->close();
                 } else {
@@ -80,9 +96,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <title>Iniciar Sesión - AlCorte Pro</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --gold-primary: #D4AF37;
+            --gold-secondary: #AA8C2C;
+            --gold-glow: rgba(212, 175, 55, 0.3);
+            --dark-bg: #050505;
+            --dark-surface: #121212;
+            --dark-surface-elevated: #1E1E1E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A0A0A0;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -91,13 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         html, body {
             height: 100%;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        }
-
-        body {
-            background: #f9fafb;
-            color: #111827;
-            display: flex;
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-primary);
         }
 
         .login-container {
@@ -108,64 +131,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         /* LEFT PANEL - BRAND */
         .login-brand {
-            flex: 1;
-            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-            color: white;
+            flex: 1.2;
+            background: linear-gradient(135deg, rgba(5,5,5,0.92) 0%, rgba(18,18,18,0.97) 100%), 
+                        url('https://images.unsplash.com/photo-1585747860715-2ba37e788b70?ixlib=rb-4.0.3&auto=format&fit=crop&w=2074&q=80') center/cover;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 60px 40px;
             position: relative;
             overflow: hidden;
+            border-right: 1px solid rgba(212, 175, 55, 0.1);
         }
 
         .login-brand::before {
             content: '';
             position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(180, 147, 99, 0.1) 0%, transparent 70%);
-            border-radius: 50%;
-        }
-
-        .login-brand::after {
-            content: '';
-            position: absolute;
-            bottom: -50%;
-            left: -50%;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(180, 147, 99, 0.05) 0%, transparent 70%);
-            border-radius: 50%;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at center, transparent 0%, var(--dark-bg) 100%);
+            z-index: 1;
         }
 
         .brand-content {
             position: relative;
-            z-index: 1;
+            z-index: 2;
             text-align: center;
+            padding: 40px;
+            animation: fadeIn 1.2s ease-out;
         }
 
         .brand-icon {
-            font-size: 80px;
-            margin-bottom: 30px;
-            color: #b49363;
+            font-size: 90px;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--gold-primary), #F3E5AB);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 4px 15px var(--gold-glow));
+            transform: translateY(0);
+            animation: float 6s ease-in-out infinite;
         }
 
         .brand-title {
-            font-size: 42px;
+            font-size: 56px;
             font-weight: 700;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
             letter-spacing: -1px;
+            background: linear-gradient(to right, #FFFFFF, var(--gold-primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .brand-subtitle {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.7);
-            max-width: 300px;
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 400px;
             line-height: 1.6;
+            margin: 0 auto;
+            font-weight: 300;
         }
 
         /* RIGHT PANEL - FORM */
@@ -176,188 +200,251 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             justify-content: center;
             align-items: center;
             padding: 60px 40px;
-            background: #ffffff;
+            background: var(--dark-bg);
+            position: relative;
+        }
+
+        /* Subtle gold glow behind the form */
+        .login-form-container::before {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--gold-glow) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.3;
+            pointer-events: none;
         }
 
         .login-form-wrapper {
             width: 100%;
-            max-width: 380px;
+            max-width: 420px;
+            position: relative;
+            z-index: 1;
+            background: rgba(18, 18, 18, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 50px 40px;
+            border-radius: 24px;
+            border: 1px solid rgba(212, 175, 55, 0.15);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.8s ease-out;
         }
 
         .form-header {
             margin-bottom: 40px;
-        }
-
-        .form-header-logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-            font-size: 18px;
-            font-weight: 700;
-            color: #b49363;
-        }
-
-        .form-header-logo i {
-            font-size: 24px;
+            text-align: center;
         }
 
         .form-header h1 {
             font-size: 32px;
-            font-weight: 700;
-            color: #111827;
-            margin: 0;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
         }
 
         .form-header p {
-            font-size: 14px;
-            color: #6b7280;
-            margin-top: 8px;
+            font-size: 15px;
+            color: var(--text-secondary);
+            font-weight: 300;
         }
 
         .error-banner {
             margin-bottom: 24px;
-            padding: 14px 16px;
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            border-radius: 8px;
+            padding: 16px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
             font-size: 14px;
-            color: #7f1d1d;
+            color: #EF4444;
             display: flex;
             align-items: center;
-            gap: 10px;
-        }
-
-        .error-banner i {
-            font-size: 16px;
-            flex-shrink: 0;
+            gap: 12px;
+            animation: shake 0.5s ease-in-out;
         }
 
         .form-group {
-            margin-bottom: 18px;
+            margin-bottom: 24px;
+            position: relative;
         }
 
         .form-label {
             display: block;
             font-size: 13px;
-            font-weight: 600;
-            color: #111827;
+            font-weight: 500;
+            color: var(--text-secondary);
             margin-bottom: 8px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            transition: color 0.3s;
+        }
+
+        .form-input-wrapper {
+            position: relative;
+        }
+
+        .form-input-wrapper i.icon-left {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 18px;
+            transition: color 0.3s;
+            pointer-events: none;
         }
 
         .form-input {
             width: 100%;
-            padding: 12px 14px;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 16px 16px 16px 48px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            font-size: 15px;
             font-family: inherit;
-            background: #ffffff;
-            color: #111827;
-            transition: all 0.2s;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
         }
 
         .form-input:focus {
             outline: none;
-            border-color: #b49363;
-            box-shadow: 0 0 0 3px rgba(180, 147, 99, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--gold-primary);
+            box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.1);
+        }
+
+        .form-input:focus + i.icon-left,
+        .form-input-wrapper:focus-within i.icon-left {
+            color: var(--gold-primary);
         }
 
         .form-input::placeholder {
-            color: #9ca3af;
-        }
-
-        .password-toggle {
-            position: relative;
+            color: rgba(255, 255, 255, 0.2);
         }
 
         .password-toggle-btn {
             position: absolute;
-            right: 12px;
+            right: 16px;
             top: 50%;
             transform: translateY(-50%);
             background: none;
             border: none;
-            color: #6b7280;
+            color: var(--text-secondary);
             cursor: pointer;
-            font-size: 16px;
-            padding: 4px 8px;
-            display: flex;
-            align-items: center;
+            font-size: 18px;
+            padding: 4px;
+            transition: color 0.3s;
         }
 
         .password-toggle-btn:hover {
-            color: #111827;
+            color: var(--gold-primary);
         }
 
         .form-submit {
             width: 100%;
-            padding: 12px;
-            margin-top: 28px;
-            background: #18181b;
-            color: white;
+            padding: 16px;
+            margin-top: 12px;
+            background: linear-gradient(135deg, var(--gold-primary) 0%, var(--gold-secondary) 100%);
+            color: #000000;
             border: none;
-            border-radius: 8px;
-            font-size: 14px;
+            border-radius: 12px;
+            font-size: 16px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px var(--gold-glow);
+        }
+
+        .form-submit::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s ease;
         }
 
         .form-submit:hover {
-            background: #0f0f0f;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(212, 175, 55, 0.4);
+        }
+
+        .form-submit:hover::before {
+            left: 100%;
         }
 
         .form-submit:active {
-            transform: scale(0.98);
+            transform: translateY(1px);
+        }
+
+        /* Animations */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-12px); }
+            100% { transform: translateY(0px); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
         }
 
         /* RESPONSIVE */
-        @media (max-width: 1024px) {
-            .login-container {
-                flex-direction: column;
-            }
+        .mobile-brand-logo {
+            display: none;
+        }
 
+        @media (max-width: 900px) {
             .login-brand {
-                padding: 40px 20px;
-                min-height: 200px;
-            }
-
-            .brand-icon {
-                font-size: 60px;
-                margin-bottom: 20px;
-            }
-
-            .brand-title {
-                font-size: 32px;
-                margin-bottom: 10px;
+                display: none;
             }
 
             .login-form-container {
-                padding: 40px 20px;
+                min-height: 100vh;
+                padding: 24px 20px;
+                justify-content: center;
             }
-        }
 
-        @media (max-width: 640px) {
             .login-form-wrapper {
-                max-width: 100%;
+                padding: 40px 24px;
+                border-radius: 20px;
+                background: rgba(18, 18, 18, 0.85);
             }
 
-            .form-header h1 {
-                font-size: 24px;
+            .mobile-brand-logo {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                font-size: 26px;
+                font-weight: 700;
+                color: var(--gold-primary);
+                margin-bottom: 24px;
+                letter-spacing: -0.5px;
             }
 
-            .brand-icon {
-                font-size: 48px;
-            }
-
-            .brand-title {
-                font-size: 24px;
+            .mobile-brand-logo i {
+                font-size: 28px;
             }
         }
     </style>
@@ -368,10 +455,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <div class="login-brand">
             <div class="brand-content">
                 <div class="brand-icon">
-                    <i class="fas fa-scissors"></i>
+                    <i class="fas fa-cut"></i>
                 </div>
                 <h2 class="brand-title">AlCorte Pro</h2>
-                <p class="brand-subtitle">Sistema profesional de gestión de citas para barberías. Agenda inteligente, clientes satisfechos.</p>
+                <p class="brand-subtitle">Eleva el estándar de tu barbería. Gestión inteligente, diseño premium.</p>
             </div>
         </div>
 
@@ -379,17 +466,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <div class="login-form-container">
             <div class="login-form-wrapper">
                 <div class="form-header">
-                    <div class="form-header-logo">
-                        <i class="fas fa-scissors"></i>
-                        AlCorte
+                    <div class="mobile-brand-logo">
+                        <i class="fas fa-cut"></i>
+                        <span>AlCorte Pro</span>
                     </div>
-                    <h1>Bienvenido de vuelta</h1>
-                    <p>Inicia sesión en tu cuenta para continuar</p>
+                    <h1>Bienvenido</h1>
+                    <p>Inicia sesión para acceder al panel</p>
                 </div>
 
                 <?php if(!empty($error)): ?>
                     <div class="error-banner">
-                        <i class="fas fa-circle-xmark"></i>
+                        <i class="fas fa-exclamation-circle"></i>
                         <span><?php echo htmlspecialchars($error); ?></span>
                     </div>
                 <?php endif; ?>
@@ -399,22 +486,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                     <div class="form-group">
                         <label class="form-label">Usuario</label>
-                        <input type="text" name="usuario" class="form-input" placeholder="Ingresa tu usuario" required autocomplete="off">
+                        <div class="form-input-wrapper">
+                            <i class="fas fa-user icon-left"></i>
+                            <input type="text" name="usuario" class="form-input" placeholder="Tu nombre de usuario" required autocomplete="off">
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Contraseña</label>
-                        <div class="password-toggle">
-                            <input type="password" name="password" id="password" class="form-input" placeholder="Ingresa tu contraseña" required>
-                            <button type="button" class="password-toggle-btn" onclick="togglePassword()">
+                        <div class="form-input-wrapper">
+                            <i class="fas fa-lock icon-left"></i>
+                            <input type="password" name="password" id="password" class="form-input" placeholder="Tu contraseña secreta" required>
+                            <button type="button" class="password-toggle-btn" onclick="togglePassword()" title="Mostrar/Ocultar contraseña">
                                 <i class="fas fa-eye" id="toggleIcon"></i>
                             </button>
                         </div>
                     </div>
 
                     <button type="submit" class="form-submit">
-                        <i class="fas fa-sign-in-alt" style="margin-right: 8px;"></i>
-                        Iniciar Sesión
+                        <i class="fas fa-arrow-right-to-bracket" style="margin-right: 8px;"></i>
+                        Ingresar al Sistema
                     </button>
                 </form>
             </div>
@@ -427,14 +518,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             const icon = document.getElementById('toggleIcon');
             if (input.type === 'password') {
                 input.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
             } else {
                 input.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
             }
         }
+
+        // Animación sutil en el foco de los inputs
+        document.querySelectorAll('.form-input').forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.style.transform = 'translateY(-2px)';
+                this.parentElement.style.transition = 'transform 0.3s ease';
+            });
+            input.addEventListener('blur', function() {
+                this.parentElement.style.transform = 'translateY(0)';
+            });
+        });
     </script>
 </body>
 </html>
