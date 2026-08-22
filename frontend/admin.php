@@ -204,7 +204,9 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
 
         .admin-container {
             display: flex;
+            height: 100vh;
             min-height: 100vh;
+            overflow: hidden;
         }
 
         /* SIDEBAR */
@@ -347,27 +349,29 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
             margin-left: 240px;
             display: flex;
             flex-direction: column;
-            min-height: 100vh;
+            height: 100vh;
+            min-height: 0;
+            overflow: hidden;
         }
 
-        /* HEADER */
-        .header {
-            height: 64px;
-            background: #ffffff;
-            border-bottom: 1px solid #e5e7eb;
-            display: flex;
+        /* HEADER (eliminado — menú móvil flotante) */
+        .mobile-menu-fab {
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            z-index: 900;
+            display: none;
             align-items: center;
-            justify-content: space-between;
-            padding: 0 32px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-
-        .header-breadcrumb {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #9ca3af;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            background: #0f172a;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            font-size: 18px;
         }
 
         .success-badge {
@@ -383,8 +387,11 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
         /* CONTENT */
         .content {
             flex: 1;
+            min-height: 0;
             padding: 32px;
             overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
         }
 
         .kpi-grid {
@@ -675,19 +682,14 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
             .main-content {
                 margin-left: 0;
             }
-            .header {
-                padding: 0 16px;
-            }
             .content {
                 padding: 16px;
             }
             .kpi-grid {
                 grid-template-columns: 1fr;
             }
-            .mobile-toggle {
+            .mobile-menu-fab {
                 display: inline-flex !important;
-                align-items: center;
-                justify-content: center;
             }
             .mobile-close {
                 display: inline-block !important;
@@ -697,6 +699,9 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
 </head>
 <body>
     <div class="admin-container">
+        <button type="button" id="sidebar-toggle" class="mobile-menu-fab" aria-label="Abrir menú">
+            <i class="fas fa-bars"></i>
+        </button>
         <!-- SIDEBAR -->
         <aside class="sidebar">
             <div class="sidebar-brand" style="flex-direction:column;align-items:flex-start;gap:2px">
@@ -805,22 +810,11 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
 
         <!-- MAIN -->
         <div class="main-content">
-            <!-- HEADER -->
-            <header class="header" style="display:flex; align-items:center; justify-content:space-between;">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <button type="button" id="sidebar-toggle" style="background:none; border:none; color:#111827; font-size:20px; cursor:pointer; display:none; padding:8px; border-radius:6px;" class="mobile-toggle">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    
-                </div>
-                <?php if (!empty($msg)): ?>
-                    <span class="success-badge">✓ <?php echo $msg; ?></span>
-                <?php endif; ?>
-            </header>
-
-            <!-- CONTENT -->
             <div class="content">
 
+                <?php if (!empty($msg)): ?>
+                    <div class="success-badge" style="margin-bottom:16px;display:inline-flex">✓ <?php echo $msg; ?></div>
+                <?php endif; ?>
 
                 <!-- PAGE CONTENT -->
                 <?php if ($page == 'citas'): ?>
@@ -2335,13 +2329,15 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                         </div>
                                         <div class="form-group" style="margin-bottom: 0;">
                                             <label class="form-label" style="font-size:11px; margin-bottom:4px;">Logo del Negocio</label>
-                                            <div style="display:flex;align-items:center;gap:10px">
-                                                <?php if (!empty($config['logo_url'])): ?>
-                                                    <img src="<?php echo htmlspecialchars($config['logo_url']); ?>" style="height:32px;max-width:80px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;padding:2px;background:#fff">
-                                                <?php endif; ?>
-                                                <input type="file" name="logo_file" accept="image/*" class="form-input" style="font-size:11px; padding:4px 8px; height:32px;">
+                                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                                                <img id="logo_preview"
+                                                     src="<?php echo !empty($config['logo_url']) ? htmlspecialchars($config['logo_url']) : ''; ?>"
+                                                     alt="Vista previa del logo"
+                                                     style="height:48px;max-width:120px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;padding:4px;background:#fff;<?php echo empty($config['logo_url']) ? 'display:none;' : ''; ?>">
+                                                <input type="file" id="logo_file" name="logo_file" accept="image/jpeg,image/png,image/webp,image/gif" class="form-input" style="font-size:11px; padding:4px 8px; height:32px;flex:1;min-width:180px;" onchange="previewLogoFile(this)">
                                             </div>
-                                            <input type="text" name="logo_url" class="form-input" placeholder="O pega una URL directa de tu logo" value="<?php echo htmlspecialchars($config['logo_url'] ?? ''); ?>" style="margin-top:6px;font-size:11px; padding:6px 10px; height:32px;">
+                                            <input type="text" id="logo_url" name="logo_url" class="form-input" placeholder="O pega una URL directa de tu logo" value="<?php echo htmlspecialchars($config['logo_url'] ?? ''); ?>" style="margin-top:6px;font-size:11px; padding:6px 10px; height:32px;" oninput="previewLogoUrl(this.value)">
+                                            <small style="color:#9ca3af;font-size:10px;margin-top:4px;display:block">JPG, PNG, WEBP o GIF. Máx. recomendado 2 MB.</small>
                                         </div>
                                     </div>
                                 </div>
@@ -2516,6 +2512,26 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                                     </button>
                                 </div>
                             </form>
+                            <script>
+                            function previewLogoFile(input) {
+                                const preview = document.getElementById('logo_preview');
+                                if (!preview || !input.files || !input.files[0]) return;
+                                preview.src = URL.createObjectURL(input.files[0]);
+                                preview.style.display = 'block';
+                            }
+                            function previewLogoUrl(url) {
+                                const preview = document.getElementById('logo_preview');
+                                if (!preview) return;
+                                const trimmed = (url || '').trim();
+                                if (!trimmed) {
+                                    preview.style.display = 'none';
+                                    preview.removeAttribute('src');
+                                    return;
+                                }
+                                preview.src = trimmed;
+                                preview.style.display = 'block';
+                            }
+                            </script>
                             <?php if ($has_custom_colors): ?>
                             <script>
                                 document.querySelector('[name="color_primario"]').addEventListener('input', function() {

@@ -143,12 +143,13 @@ $plan_colors = [
 
         /* ── MAIN ── */
         .main{flex:1;margin-left:248px;display:flex;flex-direction:column;min-height:100vh}
-        .topnav{height:62px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:50}
-        .breadcrumb{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.2em;color:#94a3b8;display:flex;align-items:center;gap:8px}
-        .breadcrumb span{color:#0f172a}
-        .topnav-right{display:flex;align-items:center;gap:10px}
+        .mobile-menu-fab{
+            position:fixed;top:14px;left:14px;z-index:900;display:none;align-items:center;justify-content:center;
+            width:42px;height:42px;background:#0f172a;color:#fff;border:none;border-radius:10px;
+            box-shadow:0 4px 12px rgba(0,0,0,.2);cursor:pointer;font-size:18px
+        }
         .msg-pill{font-size:11px;font-weight:800;padding:6px 14px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:2rem;letter-spacing:.03em}
-        .setup-btn{font-size:11px;font-weight:900;padding:8px 16px;background:#7c3aed;color:white;border-radius:.75rem;text-decoration:none;text-transform:uppercase;letter-spacing:.08em;transition:all .15s}
+        .setup-btn{font-size:11px;font-weight:900;padding:8px 16px;background:#7c3aed;color:white;border-radius:.75rem;text-decoration:none;text-transform:uppercase;letter-spacing:.08em;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
         .setup-btn:hover{background:#6d28d9}
         .content{flex:1;padding:28px 28px 40px}
 
@@ -266,7 +267,7 @@ $plan_colors = [
             .shop-plan-stats{grid-template-columns:1fr}
             .form-row{grid-template-columns:1fr}
             .content{padding:16px}
-            .menu-toggle{display:inline-flex !important;align-items:center;justify-content:center;width:36px;height:36px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:.5rem;cursor:pointer;color:#0f172a;margin-right:10px}
+            .mobile-menu-fab{display:inline-flex !important}
             .sidebar-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:150}
             .sidebar-overlay.active{display:block}
         }
@@ -275,6 +276,7 @@ $plan_colors = [
 </head>
 <body>
 <div class="layout">
+<button type="button" class="mobile-menu-fab" id="menuBtn" aria-label="Abrir menú"><i class="fas fa-bars"></i></button>
 
 <!-- ══ SIDEBAR ══ -->
 <aside class="sidebar" id="sidebar">
@@ -326,24 +328,16 @@ $plan_colors = [
 
 <!-- ══ MAIN ══ -->
 <div class="main">
-    <nav class="topnav">
-        <div class="breadcrumb">
-            <button class="menu-toggle" id="menuBtn" style="display:none;"><i class="fas fa-bars"></i></button>
-            Torre de Control <i class="fas fa-chevron-right" style="font-size:8px;color:#cbd5e1"></i>
-            <span><?php
-                $page_labels = ['dashboard'=>'DASHBOARD','estadisticas'=>'ESTADÍSTICAS','barbershops'=>'TIENDAS','planes'=>'PLANES','pagos'=>'PAGOS','settings'=>'CONFIGURACIÓN','usuarios'=>'USUARIOS'];
-                echo $page_labels[$page] ?? strtoupper(str_replace('_',' ',$page));
-            ?></span>
-        </div>
-        <div class="topnav-right">
-            <?php if($msg): ?><span class="msg-pill">✓ <?php echo $msg; ?></span><?php endif; ?>
-            <?php if(!$setup_ok): ?>
+    <div class="content">
+
+        <?php if ($msg || !$setup_ok): ?>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+            <?php if ($msg): ?><span class="msg-pill">✓ <?php echo $msg; ?></span><?php endif; ?>
+            <?php if (!$setup_ok): ?>
                 <a href="../backend/database/setup.php" class="setup-btn"><i class="fas fa-database"></i> Inicializar BD</a>
             <?php endif; ?>
         </div>
-    </nav>
-
-    <div class="content">
+        <?php endif; ?>
 
         <?php if(!$setup_ok && in_array($page,['pagos','planes','estadisticas'])): ?>
         <div class="setup-banner">
@@ -1375,10 +1369,6 @@ const sidebar = document.getElementById('sidebar');
 const overlay = document.getElementById('sidebarOverlay');
 
 if (menuBtn && sidebar && overlay) {
-    if (window.innerWidth <= 900) {
-        menuBtn.style.display = 'inline-flex';
-    }
-    
     menuBtn.addEventListener('click', () => {
         sidebar.classList.toggle('open');
         overlay.classList.toggle('active');
@@ -1388,14 +1378,11 @@ if (menuBtn && sidebar && overlay) {
         sidebar.classList.remove('open');
         overlay.classList.remove('active');
     });
-    
+
     window.addEventListener('resize', () => {
         if (window.innerWidth > 900) {
-            menuBtn.style.display = 'none';
             sidebar.classList.remove('open');
             overlay.classList.remove('active');
-        } else {
-            menuBtn.style.display = 'inline-flex';
         }
     });
 }

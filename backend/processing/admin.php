@@ -59,17 +59,53 @@ if ($action == 'delete_cliente') {
 
 // --- CRUD: PERSONAL / BARBEROS ---
 function handle_upload(string $field, string $subdir): ?string {
-    if (empty($_FILES[$field]['tmp_name'])) return null;
+    if (empty($_FILES[$field]['tmp_name'])) {
+        return null;
+    }
     $file = $_FILES[$field];
-    if ($file['error'] !== UPLOAD_ERR_OK) return null;
-    $allowed = ['image/jpeg','image/png','image/webp','image/gif'];
-    if (!in_array(mime_content_type($file['tmp_name']), $allowed)) return null;
-    $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        error_log("Upload {$field}: error code {$file['error']}");
+        return null;
+    }
+
+    $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowed_ext, true)) {
+        return null;
+    }
+
+    $allowed_mime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    $mime_ok = false;
+    if (function_exists('mime_content_type')) {
+        $mime_ok = in_array(mime_content_type($file['tmp_name']), $allowed_mime, true);
+    }
+    if (!$mime_ok && function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo) {
+            $detected = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+            $mime_ok = in_array($detected, $allowed_mime, true);
+        }
+    }
+    if (!$mime_ok) {
+        $mime_ok = in_array($ext, $allowed_ext, true);
+    }
+    if (!$mime_ok) {
+        error_log("Upload {$field}: tipo de archivo no permitido");
+        return null;
+    }
+
     $name = uniqid('img_', true) . '.' . $ext;
-    $dir  = __DIR__ . '/../../uploads/' . $subdir . '/';
-    if (!is_dir($dir)) mkdir($dir, 0775, true);
-    move_uploaded_file($file['tmp_name'], $dir . $name);
-    return '/alcorte-prueba/uploads/' . $subdir . '/' . $name;
+    $dir  = dirname(__DIR__, 2) . '/uploads/' . trim($subdir, '/') . '/';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true)) {
+        error_log("Upload {$field}: no se pudo crear directorio {$dir}");
+        return null;
+    }
+    if (!move_uploaded_file($file['tmp_name'], $dir . $name)) {
+        error_log("Upload {$field}: move_uploaded_file falló");
+        return null;
+    }
+    return upload_public_url($subdir, $name);
 }
 
 if ($action == 'add_barbero') {

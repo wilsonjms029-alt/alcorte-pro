@@ -318,11 +318,11 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
             max-width: 480px;
             background: var(--card-bg);
             border-radius: 24px;
-            overflow: hidden;
             border: 1px solid var(--border-gold);
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px var(--primary-glow);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
+            isolation: isolate;
         }
 
         /* ── APP HEADER ── */
@@ -331,6 +331,7 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
             display: flex;
             flex-direction: column;
             border-bottom: 1px solid var(--border);
+            border-radius: 24px 24px 0 0;
         }
         .hdr-top {
             display: flex;
@@ -439,18 +440,25 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
         .search-inp::placeholder { color: var(--faint); }
 
         /* ── SERVICE CARDS ── */
-        .svc-list {
-            padding: 0 16px;
+        .svc-list,
+        .spec-track {
             display: flex;
             gap: 10px;
             overflow-x: auto;
+            overflow-y: hidden;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
-            padding-bottom: 6px;
+            touch-action: pan-x;
+            scroll-snap-type: x proximity;
+            padding: 0 16px 8px;
+            margin: 0;
+            max-width: 100%;
         }
-        .svc-list::-webkit-scrollbar { display: none; }
+        .svc-list::-webkit-scrollbar,
+        .spec-track::-webkit-scrollbar { display: none; }
         .svc-card {
             flex: 0 0 92px;
+            scroll-snap-align: start;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -635,18 +643,9 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
         .t-slot.t-dis { opacity: .25; pointer-events: none; }
 
         /* ── SPECIALIST CARDS ── */
-        .spec-track {
-            padding: 0 16px;
-            display: flex;
-            gap: 10px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-            padding-bottom: 6px;
-        }
-        .spec-track::-webkit-scrollbar { display: none; }
         .spec-card {
             flex: 0 0 94px;
+            scroll-snap-align: start;
             display: flex;
             flex-direction: column;
             align-items: center;

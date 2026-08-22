@@ -219,6 +219,30 @@ function csrf_regenerate(): void {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
+/** Ruta pública base del proyecto (ej. /tmp-evanys-mobile/alcorte-pro o vacío en vhost). */
+function project_base_url(): string {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+    $root = realpath(dirname(__DIR__, 2));
+    $docRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
+    if ($root && $docRoot && str_starts_with($root, $docRoot)) {
+        $rel = str_replace('\\', '/', substr($root, strlen($docRoot)));
+        $cached = ($rel === '' || $rel === '/') ? '' : rtrim($rel, '/');
+    } else {
+        $cached = '';
+    }
+    return $cached;
+}
+
+/** URL pública de un archivo en uploads/. */
+function upload_public_url(string $subdir, string $filename): string {
+    $base = project_base_url();
+    $path = 'uploads/' . trim($subdir, '/') . '/' . $filename;
+    return ($base ? $base . '/' : '/') . $path;
+}
+
 // ─────────── Plan de sucursal ───────────
 function get_plan_sucursal(mysqli $conn, int $sucursal_id): ?array {
     $stmt = $conn->prepare(

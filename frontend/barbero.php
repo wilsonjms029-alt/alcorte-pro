@@ -313,24 +313,24 @@ $stmt_kpi->close();
             min-height: 100vh;
         }
 
-        /* HEADER */
-        .header {
-            height: 64px;
-            background: #ffffff;
-            border-bottom: 1px solid #e5e7eb;
-            display: flex;
+        /* HEADER (eliminado — menú móvil flotante) */
+        .mobile-menu-fab {
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            z-index: 900;
+            display: none;
             align-items: center;
-            justify-content: space-between;
-            padding: 0 32px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-
-        .header-breadcrumb {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #9ca3af;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            background: #0f172a;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            font-size: 18px;
         }
 
         .header-badge {
@@ -558,9 +558,6 @@ $stmt_kpi->close();
             .main-content {
                 margin-left: 200px;
             }
-            .header {
-                padding: 0 16px;
-            }
             .content {
                 padding: 16px;
             }
@@ -584,10 +581,8 @@ $stmt_kpi->close();
             .main-content {
                 margin-left: 0;
             }
-            .mobile-toggle {
+            .mobile-menu-fab {
                 display: inline-flex !important;
-                align-items: center;
-                justify-content: center;
             }
             .mobile-close {
                 display: inline-block !important;
@@ -603,6 +598,9 @@ $stmt_kpi->close();
         </div>
     <?php endif; ?>
     <div class="barbero-container">
+        <button type="button" id="sidebar-toggle" class="mobile-menu-fab" aria-label="Abrir menú">
+            <i class="fas fa-bars"></i>
+        </button>
         <!-- SIDEBAR -->
         <aside class="sidebar">
             <div class="sidebar-brand" style="flex-direction:column;align-items:flex-start;gap:2px">
@@ -650,29 +648,19 @@ $stmt_kpi->close();
 
         <!-- MAIN -->
         <div class="main-content">
-            <!-- HEADER -->
-            <header class="header" style="display:flex; align-items:center; justify-content:space-between;">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <button type="button" id="sidebar-toggle" style="background:none; border:none; color:#111827; font-size:20px; cursor:pointer; display:none; padding:8px; border-radius:6px;" class="mobile-toggle">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    <span class="header-breadcrumb"><?php echo $page === 'agenda' ? 'Mi Agenda de Turnos' : 'Mis Estadísticas'; ?></span>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px">
-                    <?php if ($msg): ?><span class="msg-toast"><i class="fas fa-circle-check"></i> <?php echo $msg; ?></span><?php endif; ?>
-                    <span class="header-badge" style="background:#eef2ff;color:#3730a3;border-color:#c7d2fe">
-                        <i class="fas fa-hourglass-half"></i>
-                        <?php echo $n_programadas; ?> Pendiente<?php echo $n_programadas != 1 ? 's' : ''; ?>
-                    </span>
-                    <span class="header-badge">
-                        <i class="fas fa-calendar-day"></i>
-                        <?php echo $total_agenda; ?> Turno<?php echo $total_agenda != 1 ? 's' : ''; ?>
-                    </span>
-                </div>
-            </header>
-
             <div class="content">
                 <div class="content-max">
+                    <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+                        <?php if ($msg): ?><span class="msg-toast"><i class="fas fa-circle-check"></i> <?php echo $msg; ?></span><?php endif; ?>
+                        <span class="header-badge" style="background:#eef2ff;color:#3730a3;border-color:#c7d2fe">
+                            <i class="fas fa-hourglass-half"></i>
+                            <?php echo $n_programadas; ?> Pendiente<?php echo $n_programadas != 1 ? 's' : ''; ?>
+                        </span>
+                        <span class="header-badge">
+                            <i class="fas fa-calendar-day"></i>
+                            <?php echo $total_agenda; ?> Turno<?php echo $total_agenda != 1 ? 's' : ''; ?>
+                        </span>
+                    </div>
                     <?php if ($page === 'agenda'): ?>
                         <!-- FILTRO DE CITAS -->
                         <form method="GET" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px; align-items:flex-end; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; padding:16px;">
