@@ -29,7 +29,7 @@ try {
             if ($method !== 'POST') {
                 api_err('Método no permitido', 405);
             }
-            require __DIR__ . '/../processing/admin.php';
+            require_once __DIR__ . '/../processing/admin.php';
             api_err('Acción no reconocida', 400);
             break;
 
@@ -37,7 +37,7 @@ try {
             if ($method !== 'POST') {
                 api_err('Método no permitido', 405);
             }
-            require __DIR__ . '/../processing/superadmin.php';
+            require_once __DIR__ . '/../processing/superadmin.php';
             api_err('Acción no reconocida', 400);
             break;
 
@@ -45,7 +45,7 @@ try {
             if ($method !== 'POST') {
                 api_err('Método no permitido', 405);
             }
-            require __DIR__ . '/../processing/usuarios.php';
+            require_once __DIR__ . '/../processing/usuarios.php';
             api_err('Acción no reconocida', 400);
             break;
 
@@ -53,7 +53,7 @@ try {
             if ($method !== 'POST') {
                 api_err('Método no permitido', 405);
             }
-            require __DIR__ . '/../processing/barbero.php';
+            require_once __DIR__ . '/../processing/barbero.php';
             api_err('Acción no reconocida', 400);
             break;
 

@@ -1,5 +1,10 @@
 <?php
-require_once '../config/config.php';
+if (defined('ALCORTE_ADMIN_PROCESSING_LOADED')) {
+    return;
+}
+define('ALCORTE_ADMIN_PROCESSING_LOADED', true);
+
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../api/helpers.php';
 
 $allowed_roles = ['admin', 'superadmin', 'gerente'];
@@ -11,19 +16,7 @@ if (!isset($_SESSION['rol']) || !in_array($_SESSION['rol'], $allowed_roles)) {
     exit;
 }
 
-if (!function_exists('admin_get_scope_sucursal_id')) {
-    function admin_get_scope_sucursal_id(): ?int {
-        return api_scope_sucursal_id();
-    }
-}
-
-if (!function_exists('admin_handle_upload')) {
-    function admin_handle_upload(string $field, string $subdir): ?string {
-        return api_handle_upload($field, $subdir);
-    }
-}
-
-$scope_id = admin_get_scope_sucursal_id();
+$scope_id = api_scope_sucursal_id();
 $action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 
 // --- CRUD: CLIENTES ---
@@ -102,7 +95,7 @@ if ($action == 'add_barbero') {
     $barb_usuario    = trim($_POST['barb_usuario'] ?? '');
     $barb_password   = trim($_POST['barb_password'] ?? '');
 
-    $uploaded = admin_handle_upload('foto_file', 'barberos');
+    $uploaded = api_handle_upload('foto_file', 'barberos');
     $foto_url = $uploaded
         ?? (trim($_POST['foto_url'] ?? '') ?: 'https://ui-avatars.com/api/?background=333&color=fff&name=' . urlencode($nombre));
 
@@ -144,7 +137,7 @@ if ($action == 'edit_barbero') {
     $almuerzo_inicio = $_POST['almuerzo_inicio'];
     $almuerzo_fin = $_POST['almuerzo_fin'];
     $activo   = isset($_POST['activo']) ? 1 : 0;
-    $uploaded = admin_handle_upload('foto_file', 'barberos');
+    $uploaded = api_handle_upload('foto_file', 'barberos');
     $foto_url_new = $uploaded ?? (trim($_POST['foto_url'] ?? '') ?: null);
 
     if ($scope_id !== null) {
@@ -204,8 +197,7 @@ if ($action == 'add_servicio') {
     $duracion   = trim($_POST['svc_duracion'] ?? '30 min');
     $precio     = trim($_POST['svc_precio'] ?? '');
     $icono      = trim($_POST['svc_icono'] ?? 'fas fa-cut');
-    $uploaded    = admin_handle_upload('svc_imagen_file', 'servicios');
-    $imagen_url  = $uploaded ?? (trim($_POST['svc_imagen'] ?? '') ?: null);
+    $imagen_url  = api_upload_or_post_url('svc_imagen_file', 'servicios', 'svc_imagen');
     $descripcion = trim($_POST['svc_descripcion'] ?? '');
     $orden       = intval($_POST['svc_orden'] ?? 0);
     $suc_id      = ($scope_id !== null) ? $scope_id : 1;
@@ -225,8 +217,7 @@ if ($action == 'edit_servicio') {
     $duracion   = trim($_POST['svc_duracion'] ?? '30 min');
     $precio     = trim($_POST['svc_precio'] ?? '');
     $icono      = trim($_POST['svc_icono'] ?? 'fas fa-cut');
-    $uploaded    = admin_handle_upload('svc_imagen_file', 'servicios');
-    $imagen_url  = $uploaded ?? (trim($_POST['svc_imagen'] ?? '') ?: null);
+    $imagen_url  = api_upload_or_post_url('svc_imagen_file', 'servicios', 'svc_imagen');
     $descripcion = trim($_POST['svc_descripcion'] ?? '');
     $activo      = isset($_POST['svc_activo']) ? 1 : 0;
     $orden       = intval($_POST['svc_orden'] ?? 0);
@@ -301,7 +292,7 @@ if ($action == 'update_sys_settings') {
     $binance_pay_id = trim($_POST['binance_pay_id'] ?? '');
     $paypal_email = trim($_POST['paypal_email'] ?? '');
 
-    $uploaded_logo = admin_handle_upload('logo_file', 'logos');
+    $uploaded_logo = api_handle_upload('logo_file', 'logos');
     $logo_url_input = trim($_POST['logo_url'] ?? '');
     $logo_url = $uploaded_logo ?? ($logo_url_input !== '' ? $logo_url_input : null);
 
@@ -358,8 +349,7 @@ if ($action == 'add_producto') {
     $descripcion = trim($_POST['prod_descripcion'] ?? '');
     $precio     = floatval($_POST['prod_precio'] ?? 0);
     $stock      = intval($_POST['prod_stock'] ?? 0);
-    $uploaded   = admin_handle_upload('prod_imagen_file', 'productos');
-    $imagen_url = $uploaded ?? (trim($_POST['prod_imagen'] ?? '') ?: null);
+    $imagen_url = api_upload_or_post_url('prod_imagen_file', 'productos', 'prod_imagen');
     $suc_id     = ($scope_id !== null) ? $scope_id : 1;
     if ($nombre) {
         $stmt = $conn->prepare("INSERT INTO productos (nombre, descripcion, precio, stock, imagen_url, sucursal_id) VALUES (?, ?, ?, ?, ?, ?)");
@@ -378,8 +368,7 @@ if ($action == 'edit_producto') {
     $precio     = floatval($_POST['prod_precio'] ?? 0);
     $stock      = intval($_POST['prod_stock'] ?? 0);
     $activo     = isset($_POST['prod_activo']) ? 1 : 0;
-    $uploaded   = admin_handle_upload('prod_imagen_file', 'productos');
-    $imagen_url = $uploaded ?? (trim($_POST['prod_imagen'] ?? '') ?: null);
+    $imagen_url = api_upload_or_post_url('prod_imagen_file', 'productos', 'prod_imagen');
     $suc_id     = ($scope_id !== null) ? $scope_id : 1;
     if ($imagen_url) {
         $stmt = $conn->prepare("UPDATE productos SET nombre=?, descripcion=?, precio=?, stock=?, imagen_url=?, activo=? WHERE id=? AND sucursal_id=?");

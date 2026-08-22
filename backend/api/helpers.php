@@ -3,6 +3,11 @@
  * Helpers HTTP para la API AlCorte Pro.
  */
 
+if (defined('ALCORTE_API_HELPERS_LOADED')) {
+    return;
+}
+define('ALCORTE_API_HELPERS_LOADED', true);
+
 function api_route_parts(): array
 {
     $route = trim($_GET['route'] ?? '', '/');
@@ -129,6 +134,17 @@ function api_handle_upload(string $field, string $subdir): ?string
         return null;
     }
     return upload_public_url($subdir, $name);
+}
+
+/** Archivo subido o URL en POST; null si no hay ninguno. */
+function api_upload_or_post_url(string $fileField, string $subdir, string $postField): ?string
+{
+    $uploaded = api_handle_upload($fileField, $subdir);
+    if ($uploaded !== null) {
+        return $uploaded;
+    }
+    $fromPost = trim((string) ($_POST[$postField] ?? ''));
+    return $fromPost !== '' ? $fromPost : null;
 }
 
 /** Redirección legacy (processing) o JSON (API). */
