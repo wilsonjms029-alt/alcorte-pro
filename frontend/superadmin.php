@@ -480,6 +480,9 @@ $plan_colors = [
             }
             $proto_sa = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
             $base_sa  = $proto_sa . '://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']);
+            $base_root_sa = $proto_sa . '://' . $_SERVER['HTTP_HOST'] . rtrim(str_replace('\\', '/', dirname(dirname($_SERVER['REQUEST_URI']))), '/');
+            $url_login_sa = $base_root_sa . '/login.php';
+            $url_contrato_sa = $base_root_sa . '/contrato.php';
         ?>
 
         <div class="page-header">
@@ -490,13 +493,19 @@ $plan_colors = [
         <!-- KPIs TIENDAS -->
         <?php
             $total_shops = count($shop_data);
-            $shops_con_plan = 0; $shops_activas = 0; $shops_vencidas = 0; $shops_sin_plan = 0;
+            $shops_con_plan = 0; $shops_activas = 0; $shops_vencidas = 0; $shops_sin_plan = 0; $shops_por_vencer = 0;
+            $hoy_dt_kpi = new DateTime();
             foreach ($shop_data as $sd) {
                 if (!$sd['sub']) { $shops_sin_plan++; continue; }
                 $shops_con_plan++;
                 $vence = new DateTime($sd['sub']['fecha_vencimiento']);
-                if ($sd['sub']['estado'] === 'activo' && $vence >= new DateTime()) $shops_activas++;
-                else $shops_vencidas++;
+                if ($sd['sub']['estado'] === 'activo' && $vence >= $hoy_dt_kpi) {
+                    $shops_activas++;
+                    $diff_d = $hoy_dt_kpi->diff($vence)->days;
+                    if ($diff_d <= 3) $shops_por_vencer++;
+                } else {
+                    $shops_vencidas++;
+                }
             }
         ?>
         <div class="kpi-grid" style="margin-bottom:24px">
@@ -508,8 +517,12 @@ $plan_colors = [
                 <div class="stat-label">Plan Activo</div>
                 <div class="stat-value"><?php echo $shops_activas; ?></div>
             </div>
+            <div class="stat-card" style="background:#fffbeb;border:1px solid #fef3c7;">
+                <div class="stat-label" style="color:#b45309;">Por Vencer (≤ 3d)</div>
+                <div class="stat-value" style="color:#d97706;"><?php echo $shops_por_vencer; ?></div>
+            </div>
             <div class="stat-card rose">
-                <div class="stat-label">Vencidas</div>
+                <div class="stat-label">Vencidas (Bloqueadas)</div>
                 <div class="stat-value"><?php echo $shops_vencidas; ?></div>
             </div>
             <div class="stat-card blue">
@@ -568,21 +581,30 @@ $plan_colors = [
                     $sub = $s['sub'];
                     $hoy_dt = new DateTime();
 
+                    $dias_diff_num = null;
+                    if ($sub) {
+                        $vence_dt = new DateTime($sub['fecha_vencimiento']);
+                        $diff_obj = $hoy_dt->diff($vence_dt);
+                        $dias_diff_num = ($vence_dt < $hoy_dt) ? -$diff_obj->days : $diff_obj->days;
+                    }
+
                     // Estado de suscripción
                     if (!$sub) {
                         $sub_status = 'none'; $sub_label = 'Sin plan'; $sub_color = '#64748b'; $sub_bg = '#f8fafc';
                     } elseif ($sub['estado'] === 'suspendido') {
                         $sub_status = 'suspended'; $sub_label = 'Suspendida'; $sub_color = '#d97706'; $sub_bg = '#fffbeb';
                     } elseif ($sub['estado'] !== 'activo' || new DateTime($sub['fecha_vencimiento']) < $hoy_dt) {
-                        $sub_status = 'expired'; $sub_label = 'Vencida'; $sub_color = '#dc2626'; $sub_bg = '#fef2f2';
+                        $sub_status = 'expired'; $sub_label = 'Vencida (Bloqueada)'; $sub_color = '#dc2626'; $sub_bg = '#fef2f2';
+                    } elseif ($dias_diff_num !== null && $dias_diff_num <= 3) {
+                        $sub_status = 'expiring'; $sub_label = 'Vence en ' . ($dias_diff_num == 0 ? 'Hoy' : $dias_diff_num . 'd'); $sub_color = '#d97706'; $sub_bg = '#fffbeb';
                     } else {
                         $sub_status = 'active'; $sub_label = 'Activa'; $sub_color = '#16a34a'; $sub_bg = '#f0fdf4';
                     }
 
                     // Días restantes
                     $dias_rest = '';
-                    if ($sub && $sub_status === 'active') {
-                        $diff = $hoy_dt->diff(new DateTime($sub['fecha_vencimiento']))->days;
+                    if ($sub && ($sub_status === 'active' || $sub_status === 'expiring')) {
+                        $diff = $dias_diff_num;
                         $dias_rest = $diff . ' día' . ($diff!=1?'s':'');
                     }
 
@@ -727,7 +749,17 @@ $plan_colors = [
                             <a href="admin.php?suc=<?php echo $s['id']; ?>" class="btn btn-sm" style="background:#b49363;color:white;border:none;text-decoration:none" title="Ver panel admin de esta tienda">
                                 <i class="fas fa-columns"></i> Panel
                             </a>
+                            <?php if ($sub && ($sub_status === 'expiring' || $sub_status === 'expired')): ?>
+                            <button onclick="remindRenewalWA('<?php echo htmlspecialchars($s['nombre'], ENT_QUOTES); ?>', <?php echo (int)($dias_diff_num ?? 0); ?>, '<?php echo htmlspecialchars($sub['fecha_vencimiento'] ?? '', ENT_QUOTES); ?>')" title="Aviso de 3 días / Recordatorio por WhatsApp"
+                                style="background:#f59e0b;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:10px;font-weight:700;color:white;display:flex;align-items:center;gap:4px">
+                                <i class="fab fa-whatsapp"></i> Recordar
+                            </button>
+                            <?php endif; ?>
                             <?php if (!empty($s['token'])): ?>
+                            <button onclick="shareActivationWA('<?php echo htmlspecialchars($s['nombre'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($url_cliente, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($url_login_sa, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($url_contrato_sa, ENT_QUOTES); ?>')" title="Enviar mensaje de activación y contrato por WhatsApp"
+                                style="background:#16a34a;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:10px;font-weight:700;color:white;display:flex;align-items:center;gap:4px">
+                                <i class="fab fa-whatsapp"></i> Activar
+                            </button>
                             <button onclick="copyUrl('<?php echo htmlspecialchars($url_cliente, ENT_QUOTES); ?>', this)" title="Copiar enlace de reservas"
                                 style="background:#0f172a;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:10px;font-weight:800;color:white;display:flex;align-items:center;gap:4px">
                                 <i class="fas fa-link"></i> Reservas
@@ -880,6 +912,40 @@ $plan_colors = [
         }
         function closeAdmForm() {
             document.getElementById('admFormWrap').style.display = 'none';
+        }
+        function remindRenewalWA(nombreTienda, diasRest, fechaVenc) {
+            var tel = prompt("Introduce el número de WhatsApp de " + nombreTienda + " (ej: 584121234567) o deja vacío para copiar al portapapeles:", "");
+            if (tel === null) return;
+            var diasTxt = (diasRest == 0) ? "hoy" : (diasRest == 1 ? "mañana (en 1 día)" : (diasRest < 0 ? "hace " + Math.abs(diasRest) + " días" : "en " + diasRest + " días"));
+            var msg = (diasRest < 0)
+                ? "¡Hola equipo de *" + nombreTienda + "*! 👋\n\nLes escribimos de *AlCorte Pro* para informarles que su suscripción mensual ha vencido el pasado " + fechaVenc + " y su enlace de reservas de clientes está *pausado*.\n\n🔒 Para reactivarlo inmediatamente y seguir recibiendo reservas de sus clientes, por favor reporten su pago de renovación.\n\n¿Desean los datos de pago?"
+                : "¡Hola equipo de *" + nombreTienda + "*! 👋\n\nLes recordamos de *AlCorte Pro* que su suscripción mensual vence *" + diasTxt + "* (el " + fechaVenc + ").\n\n⚠️ Para evitar la pausa automática de su enlace de reservas de clientes el día de corte, les invitamos a renovar su servicio con anticipación.\n\n¿Desean que les facilitemos los datos de pago?";
+
+            if (tel.trim() !== "") {
+                var cleanTel = tel.replace(/[^0-9]/g, "");
+                window.open("https://wa.me/" + cleanTel + "?text=" + encodeURIComponent(msg), "_blank");
+            } else {
+                navigator.clipboard.writeText(msg).then(function() {
+                    alert("¡Mensaje de recordatorio copiado al portapapeles!");
+                });
+            }
+        }
+        function shareActivationWA(nombreTienda, urlCliente, urlLogin, urlContrato) {
+            var tel = prompt("Introduce el número de WhatsApp del negocio (con código de país, ej: 584121234567) o presiona Cancelar para sólo copiar el mensaje al portapapeles:", "");
+            var msg = "¡Hola! Te confirmamos que tu suscripción para *" + nombreTienda + "* ha sido confirmada con éxito. 🚀\n\n"
+                + "1. Tu enlace de reservas para clientes es:\n" + urlCliente + "\n\n"
+                + "2. Acceso a tu panel de administración:\n" + urlLogin + "\n\n"
+                + "3. Revisa y acepta tu Contrato de Servicio Digital aquí:\n" + urlContrato + "\n\n"
+                + "¡Mucho éxito con la gestión de tus citas!";
+
+            if (tel && tel.trim() !== "") {
+                var cleanTel = tel.replace(/[^0-9]/g, "");
+                window.open("https://wa.me/" + cleanTel + "?text=" + encodeURIComponent(msg), "_blank");
+            } else {
+                navigator.clipboard.writeText(msg).then(function() {
+                    alert("¡Mensaje de activación y contrato copiado al portapapeles listo para enviar por WhatsApp o correo!");
+                });
+            }
         }
         function copyUrl(url, btn) {
             navigator.clipboard.writeText(url).then(() => {
@@ -1390,8 +1456,8 @@ if (menuBtn && sidebar && overlay) {
 }
 document.addEventListener('DOMContentLoaded', function () {
     if (window.AlCorte) {
-        AlCorte.bindApiForms('form[action$="api/v1/superadmin"]', 'dashboard');
-        AlCorte.bindApiForms('form[action$="api/v1/usuarios"]', 'usuarios');
+        AlCorte.bindApiForms('form[action$="api/v1/superadmin"]', 'superadmin', 'dashboard');
+        AlCorte.bindApiForms('form[action$="api/v1/usuarios"]', 'usuarios', 'usuarios');
     }
 });
 </script>

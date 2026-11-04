@@ -96,7 +96,13 @@
         e.preventDefault();
         var btn = form.querySelector('[type="submit"]');
         if (btn) btn.disabled = true;
-        postForm(apiPath, form)
+        var path = apiPath;
+        var act = form.getAttribute('action') || '';
+        var m = act.match(/api\/v1\/([^?#/]+)/);
+        if (m && (!path || path === 'dashboard' || path === '')) {
+          path = m[1];
+        }
+        postForm(path, form)
           .then(function (data) {
             if (data.data && data.data.redirect) {
               window.location.href = data.data.redirect;

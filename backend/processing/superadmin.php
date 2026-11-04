@@ -1,5 +1,5 @@
 <?php
-require_once '../config/config.php';
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../api/helpers.php';
 
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
@@ -231,12 +231,17 @@ if ($action == 'add_admin') {
     $hash = password_hash($password, PASSWORD_DEFAULT);
     $stmt = $conn->prepare('INSERT INTO usuarios (usuario, password, nombre, telefono, rol, sucursal_id) VALUES (?, ?, ?, ?, \'admin\', ?)');
     $stmt->bind_param('ssssi', $usuario, $hash, $nombre, $telefono, $sucursal);
-    if ($stmt->execute()) {
+    try {
+        $stmt->execute();
         $stmt->close();
         api_superadmin_finish('Administrador creado con éxito', 'barbershops');
+    } catch (\mysqli_sql_exception $e) {
+        $stmt->close();
+        if ($e->getCode() === 1062) {
+            api_superadmin_finish('El nombre de usuario ya existe', 'barbershops');
+        }
+        throw $e;
     }
-    $stmt->close();
-    api_superadmin_finish('El nombre de usuario ya existe', 'barbershops');
 }
 
 if ($action == 'edit_admin') {
@@ -265,9 +270,17 @@ if ($action == 'edit_admin') {
         $stmt = $conn->prepare('UPDATE usuarios SET nombre=?, usuario=?, telefono=?, sucursal_id=? WHERE id=? AND rol=\'admin\'');
         $stmt->bind_param('sssii', $nombre, $usuario, $telefono, $sucursal, $id);
     }
-    $stmt->execute();
-    $stmt->close();
-    api_superadmin_finish('Administrador actualizado', 'barbershops');
+    try {
+        $stmt->execute();
+        $stmt->close();
+        api_superadmin_finish('Administrador actualizado', 'barbershops');
+    } catch (\mysqli_sql_exception $e) {
+        $stmt->close();
+        if ($e->getCode() === 1062) {
+            api_superadmin_finish('El nombre de usuario ya existe', 'barbershops');
+        }
+        throw $e;
+    }
 }
 
 if ($action == 'delete_admin') {

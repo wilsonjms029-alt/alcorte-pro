@@ -1,5 +1,5 @@
 <?php
-require_once '../backend/config/config.php';
+require_once __DIR__ . '/../backend/config/config.php';
 
 $msg      = "";
 $msg_type = "success";
@@ -8,7 +8,7 @@ $token = preg_replace('/[^a-f0-9]/', '', strtolower($_GET['t'] ?? ''));
 
 if (strlen($token) !== 32) {
     http_response_code(404);
-    die('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>No encontrado</title></head><body style="font-family:sans-serif;text-align:center;padding:60px;color:#64748b"><h2>Enlace no válido</h2><p>El enlace de reservas que usaste no es válido.<br>Solicita el enlace correcto a tu barbería.</p></body></html>');
+    die('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>No encontrado</title></head><body style="font-family:sans-serif;text-align:center;padding:60px;color:#64748b"><h2>Enlace no válido</h2><p>El enlace de reservas que usaste no es válido.<br>Solicita el enlace correcto al establecimiento.</p></body></html>');
 }
 
 $suc_row = $conn->prepare("SELECT id, nombre FROM sucursales WHERE token = ? AND activo = 1 LIMIT 1");
@@ -18,7 +18,7 @@ $suc_row = $suc_row->get_result()->fetch_assoc();
 
 if (!$suc_row) {
     http_response_code(404);
-    die('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>No encontrado</title></head><body style="font-family:sans-serif;text-align:center;padding:60px;color:#64748b"><h2>Barbería no encontrada</h2><p>El enlace de reservas no corresponde a ninguna barbería activa.</p></body></html>');
+    die('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>No encontrado</title></head><body style="font-family:sans-serif;text-align:center;padding:60px;color:#64748b"><h2>Establecimiento no encontrado</h2><p>El enlace de reservas no corresponde a ningún negocio activo.</p></body></html>');
 }
 
 $sucursal_id     = $suc_row['id'];
@@ -26,6 +26,81 @@ $nombre_sucursal = $suc_row['nombre'];
 
 // ── PLAN DE LA SUCURSAL ──
 $plan_activo = get_plan_sucursal($conn, $sucursal_id);
+if (!$plan_activo) {
+    http_response_code(403);
+    die('<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . htmlspecialchars($nombre_sucursal) . ' — Servicio en Renovación</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: \'Outfit\', sans-serif;
+            background: #07090e;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .block-card {
+            background: #0f131c;
+            border: 1px solid rgba(212, 175, 55, 0.25);
+            border-radius: 24px;
+            padding: 48px 32px;
+            max-width: 460px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.7);
+        }
+        .block-icon {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            background: rgba(212, 175, 55, 0.1);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #d4af37;
+            font-size: 26px;
+            margin: 0 auto 20px auto;
+        }
+        h2 { font-size: 24px; font-weight: 700; margin-bottom: 10px; color: #fff; }
+        .business-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.06);
+            color: #d4af37;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 5px 16px;
+            border-radius: 999px;
+            margin-bottom: 18px;
+        }
+        p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+        .footer-note { font-size: 11px; color: #64748b; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="block-card">
+        <div class="block-icon">
+            <i class="fas fa-lock"></i>
+        </div>
+        <span class="business-badge">' . htmlspecialchars($nombre_sucursal) . '</span>
+        <h2>Servicio en Renovación</h2>
+        <p>El sistema de reservas en línea de este establecimiento se encuentra pausado por renovación de servicio.<br><br>Por favor, contacta directamente al establecimiento para agendar tu cita.</p>
+        <div class="footer-note">AlCorte Pro — Plataforma de Gestión de Citas</div>
+    </div>
+</body>
+</html>');
+}
 $has_productos  = $plan_activo ? $plan_activo['has_productos'] : false;
 if (!$has_productos && $tab === 'productos') $tab = 'reservar';
 
@@ -76,7 +151,7 @@ if ($res_conf) while ($row = $res_conf->fetch_assoc()) $config[$row['clave']] = 
 
 // ── LOAD BARBERS ──
 $barberos = [];
-$res_b = $conn->prepare("SELECT id, nombre, foto_url FROM barberos WHERE activo = 1 AND sucursal_id = ? ORDER BY nombre");
+$res_b = $conn->prepare("SELECT id, nombre, foto_url, hora_inicio, hora_fin, almuerzo_inicio, almuerzo_fin FROM barberos WHERE activo = 1 AND sucursal_id = ? ORDER BY nombre");
 $res_b->bind_param("i", $sucursal_id);
 $res_b->execute();
 $res_b = $res_b->get_result();
@@ -468,8 +543,14 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
             white-space: nowrap;
         }
         .t-slot:not(.t-dis):hover { border-color: var(--gold); color: var(--gold); transform: translateY(-2px); }
-        .t-slot.sel { background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%); border-color: var(--gold); color: #000; font-weight: 700; transform: translateY(-2px); box-shadow: 0 4px 12px var(--gold-glow); }
-        .t-slot.t-dis { opacity: .25; pointer-events: none; }
+        .t-slot.t-dis {
+            opacity: .2;
+            pointer-events: none;
+            background: transparent;
+            border-color: rgba(255, 255, 255, 0.06);
+            color: var(--muted);
+            cursor: not-allowed;
+        }
 
         /* ── SPECIALIST CARDS ── */
         .spec-card {
@@ -822,27 +903,8 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
 
         <div class="sec-div"></div>
 
-        <!-- ═══ PASO 2: FECHA Y HORA ═══ -->
-        <div class="sec-title"><span class="step-num">2</span> Fecha y hora</div>
-
-        <div class="cal-wrap">
-            <div class="cal-head">
-                <strong id="calLabel"></strong>
-            </div>
-            <div class="week-row">
-                <button type="button" class="cal-nav" onclick="shiftWeek(-1)"><i class="fas fa-chevron-left"></i></button>
-                <div class="week-strip" id="weekStrip"></div>
-                <button type="button" class="cal-nav" onclick="shiftWeek(1)"><i class="fas fa-chevron-right"></i></button>
-            </div>
-        </div>
-
-        <div id="dateTitle" class="date-title" style="display:none"></div>
-        <div class="time-groups" id="timeGroups"></div>
-
-        <div class="sec-div"></div>
-
-        <!-- ═══ PASO 3: ESPECIALISTA ═══ -->
-        <div class="sec-title"><span class="step-num">3</span> Especialista</div>
+        <!-- ═══ PASO 2: ESPECIALISTA ═══ -->
+        <div class="sec-title"><span class="step-num">2</span> Especialista</div>
 
         <?php if (!empty($barberos)): ?>
         <div class="spec-track">
@@ -855,7 +917,7 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
                      alt="<?= htmlspecialchars($b['nombre']) ?>"
                      onerror="this.src='https://ui-avatars.com/api/?name=<?= urlencode($b['nombre']) ?>&background=1a3461&color=fff&size=128&bold=true'">
                 <div class="spec-name"><?= htmlspecialchars($b['nombre']) ?></div>
-                <div class="spec-role">Barbería</div>
+                <div class="spec-role">Especialista</div>
                 <div class="spec-star"><i class="fas fa-star" style="font-size:9px"></i> 5.0</div>
             </div>
             <?php endforeach; ?>
@@ -863,6 +925,27 @@ $nombre_negocio = $config['nombre_negocio'] ?? 'AlCorte Pro';
         <?php else: ?>
         <p style="padding:0 16px 4px;color:var(--muted);font-size:13px;">No hay especialistas disponibles.</p>
         <?php endif; ?>
+
+        <!-- ═══ PASO 3: FECHA Y HORA ═══ -->
+        <div class="sec-title"><span class="step-num">3</span> Fecha y hora</div>
+
+        <div class="cal-wrap">
+            <div class="cal-head">
+                <strong id="calLabel"></strong>
+            </div>
+            <div class="week-row">
+                <button type="button" class="cal-nav" onclick="shiftWeek(-1)" style="display:none"><i class="fas fa-chevron-left"></i></button>
+                <div class="week-strip" id="weekStrip"></div>
+                <button type="button" class="cal-nav" onclick="shiftWeek(1)" style="display:none"><i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+
+        <div id="dateTitle" class="date-title" style="display:none"></div>
+        <div class="time-groups" id="timeGroups"></div>
+
+        <div class="sec-div"></div>
+
+        
 
         <div class="sec-div"></div>
 
@@ -964,11 +1047,12 @@ function fmtBs(usdStr) {
 // ── STATE ──
 let ST = { svc:'', precio:'', bid:0, bnom:'', fecha:'', hora:'' };
 const STORE_TOKEN = <?= json_encode($token) ?>;
+const BARBEROS = <?= json_encode($barberos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 const MN  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MNA = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const DNA = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const DNS = ['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
-const SLOTS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00'];
+const SLOTS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'];
 
 // ── TIMEZONE (Venezuela America/Caracas) ──
 function getVETime() {
@@ -996,12 +1080,11 @@ function getVETime() {
     }
 }
 
-function getWeekStart(d) {
+function getBookingStart(d) {
     const dt = new Date(d); dt.setHours(0,0,0,0);
-    dt.setDate(dt.getDate() - dt.getDay());
     return dt;
 }
-let calWeekStart = getWeekStart(getVETime());
+let calWeekStart = getBookingStart(getVETime());
 
 // Poblar precios Bs. en las cards al cargar
 document.querySelectorAll('.svc-bs[data-usd]').forEach(el => {
@@ -1023,11 +1106,16 @@ function filterSvc(q) {
         c.style.display = c.dataset.q.includes(q) ? '' : 'none');
 }
 
-// ── CALENDAR (week strip) ──
+// ── CALENDAR (rolling 7 days: hoy hasta 7 días) ──
 function renderWeek() {
     const now = getVETime(); now.setHours(0,0,0,0);
-    const mid = new Date(calWeekStart); mid.setDate(mid.getDate() + 3);
-    document.getElementById('calLabel').textContent = MN[mid.getMonth()] + ' ' + mid.getFullYear();
+    calWeekStart = getBookingStart(now);
+    const endDt = new Date(calWeekStart); endDt.setDate(endDt.getDate() + 6);
+    const mStart = MN[calWeekStart.getMonth()];
+    const mEnd = MN[endDt.getMonth()];
+    document.getElementById('calLabel').textContent = (mStart === mEnd)
+        ? mStart + ' ' + calWeekStart.getFullYear()
+        : mStart + ' - ' + mEnd + ' ' + endDt.getFullYear();
     const strip = document.getElementById('weekStrip');
     strip.innerHTML = '';
     for (let i = 0; i < 7; i++) {
@@ -1035,7 +1123,6 @@ function renderWeek() {
         const ds = fmtDate(dt);
         const el = document.createElement('div');
         el.className = 'week-day';
-        if (dt < now) el.classList.add('dis');
         if (ds === fmtDate(now)) el.classList.add('today');
         if (ds === ST.fecha) el.classList.add('sel');
         el.innerHTML = `<span class="week-day-label">${DNS[dt.getDay()]}</span><span class="week-day-num">${dt.getDate()}</span>`;
@@ -1044,25 +1131,84 @@ function renderWeek() {
     }
 }
 function shiftWeek(dir) {
-    calWeekStart.setDate(calWeekStart.getDate() + dir * 7);
-    const floor = getWeekStart(getVETime());
-    if (calWeekStart < floor) calWeekStart = floor;
+    calWeekStart = getBookingStart(getVETime());
     renderWeek();
 }
 function pickDate(ds) {
+    const now = getVETime(); now.setHours(0,0,0,0);
+    const maxDt = new Date(now); maxDt.setDate(maxDt.getDate() + 6);
+    const [y,mo,d] = ds.split('-').map(Number);
+    const chosen = new Date(y, mo - 1, d, 0, 0, 0);
+    if (chosen < now || chosen > maxDt) return;
     ST.fecha = ds; ST.hora = '';
     document.getElementById('fec_val').value = ds;
     document.getElementById('hor_val').value = '';
     renderWeek(); fetchBloqueos(); renderTimeGroups(); syncSummary();
 }
 
-// ── TIME SLOTS (grouped) ──
+// ── TIME SLOTS & AVAILABILITY ──
+let availability_cache = {
+    barbero_id: 0,
+    fecha: '',
+    bloqueos: [],
+    citas: [],
+    horario: null
+};
+
 function fmtSlot(s) {
     const [h,m] = s.split(':');
     const hr = parseInt(h);
     const h12 = hr > 12 ? hr - 12 : (hr === 0 ? 12 : hr);
     return h12 + ':' + m + ' ' + (hr >= 12 ? 'p.m.' : 'a.m.');
 }
+
+function isSlotAvailable(s) {
+    // Si no ha seleccionado barbero, ninguna hora está activa
+    if (!ST.bid) return false;
+
+    const hor = availability_cache.horario;
+    if (hor) {
+        const hIni = (hor.hora_inicio || '09:00').slice(0, 5);
+        const hFin = (hor.hora_fin || '17:00').slice(0, 5);
+        const aIni = (hor.almuerzo_inicio || '').slice(0, 5);
+        const aFin = (hor.almuerzo_fin || '').slice(0, 5);
+
+        // Fuera de jornada laboral del barbero
+        if (s < hIni || s >= hFin) return false;
+
+        // Horario de almuerzo del barbero
+        if (aIni && aFin && s >= aIni && s < aFin) return false;
+    }
+
+    // Cita ya reservada con este barbero
+    if (availability_cache.citas && availability_cache.citas.includes(s)) {
+        return false;
+    }
+
+    // Bloqueos manuales de horario
+    if (availability_cache.bloqueos) {
+        for (const b of availability_cache.bloqueos) {
+            if (b.dia_completo == 1) return false;
+            if (b.hora_inicio && b.hora_fin) {
+                const bIni = (b.hora_inicio || '').slice(0, 5);
+                const bFin = (b.hora_fin || '').slice(0, 5);
+                if (s >= bIni && s < bFin) return false;
+            }
+        }
+    }
+
+    // Si la fecha elegida es hoy, verificar que la hora no haya pasado
+    const now = getVETime();
+    if (ST.fecha === fmtDate(now)) {
+        const [h, m] = s.split(':').map(Number);
+        const slotDate = getVETime();
+        slotDate.setHours(h, m, 0, 0);
+        if (slotDate <= now) return false;
+    }
+
+    return true;
+}
+
 function renderTimeGroups() {
     const container = document.getElementById('timeGroups');
     const titleEl   = document.getElementById('dateTitle');
@@ -1071,61 +1217,91 @@ function renderTimeGroups() {
     const dt = new Date(y, mo - 1, d, 12, 0, 0);
     titleEl.textContent = DNA[dt.getDay()] + ', ' + d + ' de ' + MN[mo-1];
     titleEl.style.display = 'block';
-    const now = getVETime();
-    const todayStr = fmtDate(now);
+
     const groups = [
         { label: 'Mañana', slots: SLOTS.filter(s => parseInt(s) < 12) },
         { label: 'Tarde',  slots: SLOTS.filter(s => { const h=parseInt(s); return h>=12 && h<17; }) },
         { label: 'Noche',  slots: SLOTS.filter(s => parseInt(s) >= 17) },
     ];
-    container.innerHTML = groups.filter(g => g.slots.length).map(g => {
+
+    let headerNote = '';
+    if (!ST.bid) {
+        headerNote = `<div style="padding:4px 0 10px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px">
+            <i class="fas fa-hand-pointer" style="color:var(--gold)"></i> Selecciona un especialista para ver sus horas disponibles
+        </div>`;
+    } else {
+        headerNote = `<div style="padding:4px 0 10px;font-size:12px;color:var(--txt);display:flex;align-items:center;gap:6px">
+            <i class="fas fa-check-circle" style="color:var(--gold)"></i> Horas disponibles con <strong style="color:var(--gold);margin-left:2px">${ST.bnom}</strong>
+        </div>`;
+    }
+
+    container.innerHTML = headerNote + groups.filter(g => g.slots.length).map(g => {
         const chips = g.slots.map(s => {
-            const [h,m] = s.split(':');
-            let dis = '';
-            if (ST.fecha === todayStr) {
-                const st = getVETime(); st.setHours(parseInt(h), parseInt(m), 0, 0);
-                if (st <= now) dis = ' t-dis';
+            const ok = isSlotAvailable(s);
+            const dis = ok ? '' : ' t-dis';
+            const isSel = (s === ST.hora && ok);
+            if (!ok && s === ST.hora) {
+                ST.hora = '';
+                document.getElementById('hor_val').value = '';
             }
-            if (isSlotBlocked(s)) dis = ' t-dis';
-            return `<div class="t-slot${s===ST.hora?' sel':''}${dis}" onclick="pickSlot(this,'${s}')">${fmtSlot(s)}</div>`;
+            return `<div class="t-slot${isSel ? ' sel' : ''}${dis}" onclick="pickSlot(this,'${s}')">${fmtSlot(s)}</div>`;
         }).join('');
         return `<div><div class="tg-label">${g.label}</div><div class="tg-slots">${chips}</div></div>`;
     }).join('');
 }
+
 function pickSlot(el, s) {
+    if (el.classList.contains('t-dis')) return;
     document.querySelectorAll('.t-slot').forEach(b => b.classList.remove('sel'));
     el.classList.add('sel');
     ST.hora = s; document.getElementById('hor_val').value = s;
-    syncSummary();}
+    syncSummary();
+}
 
 // ── SPECIALIST ──
-let bloqueos_cache = [];
 function selSpec(card, id, nom) {
     document.querySelectorAll('.spec-card').forEach(c => c.classList.remove('sel'));
     card.classList.add('sel');
     ST.bid = id; ST.bnom = nom;
     document.getElementById('brb_val').value = id;
+
+    if (!ST.fecha) {
+        ST.fecha = fmtDate(getVETime());
+        document.getElementById('fec_val').value = ST.fecha;
+        renderWeek();
+    }
+
+    const b = (window.BARBEROS || []).find(x => x.id == id);
+    if (b) {
+        availability_cache.horario = {
+            hora_inicio: (b.hora_inicio || '09:00:00').slice(0, 5),
+            hora_fin: (b.hora_fin || '17:00:00').slice(0, 5),
+            almuerzo_inicio: (b.almuerzo_inicio || '12:00:00').slice(0, 5),
+            almuerzo_fin: (b.almuerzo_fin || '13:00:00').slice(0, 5)
+        };
+    }
+    renderTimeGroups();
     fetchBloqueos();
     syncSummary();
 }
 
 function fetchBloqueos() {
-    if (!ST.bid || !ST.fecha) { bloqueos_cache = []; return; }
-    fetch(`../api/v1/bloqueos?barbero_id=${ST.bid}&fecha=${ST.fecha}&t=${encodeURIComponent(STORE_TOKEN)}`)
+    if (!ST.bid || !ST.fecha) return;
+    const bid = ST.bid;
+    const f = ST.fecha;
+    fetch(`../api/v1/bloqueos?barbero_id=${bid}&fecha=${f}&t=${encodeURIComponent(STORE_TOKEN)}`)
         .then(r => r.json())
-        .then(data => { bloqueos_cache = (data.data && data.data.bloqueos) || data.bloqueos || []; renderTimeGroups(); })
-        .catch(() => { bloqueos_cache = []; });
-}
-
-function isSlotBlocked(slot) {
-    for (const b of bloqueos_cache) {
-        if (b.dia_completo == 1) return true;
-        if (b.hora_inicio && b.hora_fin) {
-            const s = slot + ':00';
-            if (s >= b.hora_inicio && s < b.hora_fin) return true;
-        }
-    }
-    return false;
+        .then(data => {
+            if (ST.bid !== bid || ST.fecha !== f) return;
+            const res = (data.data) || data || {};
+            availability_cache.bloqueos = res.bloqueos || [];
+            availability_cache.citas = res.citas || [];
+            if (res.horario) {
+                availability_cache.horario = res.horario;
+            }
+            renderTimeGroups();
+        })
+        .catch(() => {});
 }
 
 // ── SUMMARY ──
@@ -1183,6 +1359,14 @@ function doSubmit() {
     if (!ST.fecha) { alert('Por favor selecciona una fecha.'); return; }
     if (!ST.hora)  { alert('Por favor selecciona un horario.'); return; }
     if (!ST.bid)   { alert('Por favor selecciona un especialista.'); return; }
+    const nowCheck = getVETime(); nowCheck.setHours(0,0,0,0);
+    const maxDateCheck = new Date(nowCheck); maxDateCheck.setDate(maxDateCheck.getDate() + 6);
+    const [cy,cmo,cd] = ST.fecha.split('-').map(Number);
+    const chosenDt = new Date(cy, cmo - 1, cd, 0, 0, 0);
+    if (chosenDt < nowCheck || chosenDt > maxDateCheck) {
+        alert('Solo puedes reservar con un máximo de 7 días de anticipación.');
+        return;
+    }
     const form = document.getElementById('formReserva');
     if (!form.reportValidity()) return;
     const fd = new FormData(form);
@@ -1202,7 +1386,10 @@ function pad(n) { return String(n).padStart(2,'0'); }
 function fmtDate(d) { return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 
 // ── INIT ──
+ST.fecha = fmtDate(getVETime());
+document.getElementById('fec_val').value = ST.fecha;
 renderWeek();
+renderTimeGroups();
 </script>
 
 <?php elseif ($tab === 'productos' && $has_productos):

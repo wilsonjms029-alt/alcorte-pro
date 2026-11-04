@@ -26,8 +26,12 @@ $msg = isset($_GET['msg']) ? htmlspecialchars($_GET['msg']) : '';
 
 // Cargar plan activo de la sucursal
 $plan_activo = null;
+$sub_info    = null;
 if ($is_scoped && $scope_id) {
     $plan_activo = get_plan_sucursal($conn, $scope_id);
+    if (function_exists('get_suscripcion_info')) {
+        $sub_info = get_suscripcion_info($conn, $scope_id);
+    }
 }
 $has_club_vip       = $plan_activo ? $plan_activo['has_club_vip'] : true;
 $has_custom_colors  = $plan_activo ? $plan_activo['has_custom_colors'] : true;
@@ -748,6 +752,47 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
         <div class="main-content">
             <div class="content">
 
+                <?php if ($sub_info): 
+                    $dias_rest = intval($sub_info['dias_restantes']);
+                    $vence_f   = date('d/m/Y', strtotime($sub_info['fecha_vencimiento']));
+                    $plan_nom  = htmlspecialchars($sub_info['plan_nombre']);
+                    $wa_renew_msg = urlencode("Hola! Deseo renovar la suscripción de mi negocio (" . ($nombre_sucursal ?? 'Mi Negocio') . ") para el Plan " . $sub_info['plan_nombre'] . ".");
+                    $wa_renew_url = "https://wa.me/584120000000?text=" . $wa_renew_msg;
+                ?>
+                    <?php if ($dias_rest < 0 || $sub_info['estado'] !== 'activo'): ?>
+                        <div style="background:#fef2f2;border:1.5px solid #ef4444;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+                            <div style="display:flex;align-items:center;gap:14px">
+                                <div style="width:40px;height:40px;border-radius:50%;background:#fee2e2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">
+                                    <i class="fas fa-lock"></i>
+                                </div>
+                                <div>
+                                    <strong style="color:#991b1b;font-size:14px;display:block">¡Tu suscripción mensual ha vencido!</strong>
+                                    <span style="color:#b91c1c;font-size:13px">Tu enlace de reservas para clientes se encuentra <strong>pausado</strong>. Renueva tu mes para reactivarlo inmediatamente.</span>
+                                </div>
+                            </div>
+                            <a href="<?= $wa_renew_url ?>" target="_blank" style="background:#dc2626;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:8px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(220,38,38,0.3)">
+                                <i class="fab fa-whatsapp"></i> Renovar y Reactivar Ahora
+                            </a>
+                        </div>
+                    <?php elseif ($dias_rest <= 3): ?>
+                        <div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+                            <div style="display:flex;align-items:center;gap:14px">
+                                <div style="width:40px;height:40px;border-radius:50%;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div>
+                                    <strong style="color:#92400e;font-size:14px;display:block">
+                                        ⚠️ Aviso de Renovación: Tu plan vence <?= $dias_rest == 0 ? 'hoy' : ($dias_rest == 1 ? 'mañana (en 1 día)' : 'en ' . $dias_rest . ' días') ?> (<?= $vence_f ?>)
+                                    </strong>
+                                    <span style="color:#b45309;font-size:13px">Para evitar la suspensión automática de tu enlace de reservas para clientes, por favor renueva tu servicio a tiempo.</span>
+                                </div>
+                            </div>
+                            <a href="<?= $wa_renew_url ?>" target="_blank" style="background:#d97706;color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:8px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(217,119,6,0.3)">
+                                <i class="fab fa-whatsapp"></i> Reportar Renovación
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
                 <?php if (!empty($msg)): ?>
                     <div class="success-badge" style="margin-bottom:16px;display:inline-flex">✓ <?php echo $msg; ?></div>
                 <?php endif; ?>
@@ -829,17 +874,20 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                     ?>
 
                     <!-- FILTRO DE CITAS -->
-                    <form method="GET" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px; align-items:flex-end; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; padding:16px;">
+                    <form method="GET" id="filterCitasForm" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px; align-items:flex-end; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; padding:16px;">
                         <input type="hidden" name="page" value="citas">
+                        <?php if (isset($_GET['suc'])): ?>
+                            <input type="hidden" name="suc" value="<?php echo htmlspecialchars($_GET['suc']); ?>">
+                        <?php endif; ?>
                         
                         <div style="flex: 1; min-width: 180px;">
                             <label style="font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px; display:block;">Cliente (Nombre/Teléfono)</label>
-                            <input type="text" name="f_q" placeholder="Buscar cliente..." value="<?php echo htmlspecialchars($f_q); ?>" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius:6px; width: 100%;">
+                            <input type="text" name="f_q" id="f_q" placeholder="Escribe para buscar..." value="<?php echo htmlspecialchars($f_q); ?>" autocomplete="off" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius:6px; width: 100%;">
                         </div>
                         
                         <div style="width: 140px;">
                             <label style="font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px; display:block;">Estado</label>
-                            <select name="f_estado" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius: 6px; width: 100%; background: #fff; cursor: pointer;">
+                            <select name="f_estado" id="f_estado" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius: 6px; width: 100%; background: #fff; cursor: pointer;">
                                 <option value="todos" <?php echo $f_estado === 'todos' ? 'selected' : ''; ?>>Todos</option>
                                 <option value="programada" <?php echo $f_estado === 'programada' ? 'selected' : ''; ?>>Programadas</option>
                                 <option value="completada" <?php echo $f_estado === 'completada' ? 'selected' : ''; ?>>Completadas</option>
@@ -849,7 +897,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
 
                         <div style="width: 160px;">
                             <label style="font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px; display:block;">Especialista</label>
-                            <select name="f_barbero" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius: 6px; width: 100%; background: #fff; cursor: pointer;">
+                            <select name="f_barbero" id="f_barbero" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius: 6px; width: 100%; background: #fff; cursor: pointer;">
                                 <option value="todos" <?php echo $f_barbero === 'todos' ? 'selected' : ''; ?>>Todos</option>
                                 <?php foreach ($barberos_filter as $b_f): ?>
                                     <option value="<?php echo $b_f['id']; ?>" <?php echo strval($f_barbero) === strval($b_f['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($b_f['nombre']); ?></option>
@@ -859,22 +907,19 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
 
                         <div style="width: 150px;">
                             <label style="font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px; display:block;">Fecha</label>
-                            <input type="date" name="f_fecha" value="<?php echo htmlspecialchars($f_fecha); ?>" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius: 6px; width: 100%;">
+                            <input type="date" name="f_fecha" id="f_fecha" value="<?php echo htmlspecialchars($f_fecha); ?>" style="font-size:12px; padding:8px 12px; height:38px; border:1px solid #e5e7eb; border-radius: 6px; width: 100%;">
                         </div>
 
-                        <div style="display:flex; gap:8px;">
-                            <button type="submit" style="height:38px; padding:0 16px; background:#b49363; border:none; color:white; font-size:12px; font-weight:600; border-radius:6px; cursor:pointer;">
-                                <i class="fas fa-filter" style="margin-right:6px;"></i> Filtrar
-                            </button>
+                        <div id="citasClearWrap" style="display:flex; gap:8px;">
                             <?php if ($f_estado !== 'todos' || !empty($f_fecha) || $f_barbero !== 'todos' || !empty($f_q)): ?>
-                                <a href="?page=citas" style="height:38px; display:inline-flex; align-items:center; justify-content:center; padding:0 16px; border:1px solid #e5e7eb; border-radius:6px; color:#4b5563; text-decoration:none; font-size:12px; font-weight:600; background:#ffffff;">
+                                <a href="?page=citas<?php echo isset($_GET['suc']) ? '&suc='.htmlspecialchars($_GET['suc']) : ''; ?>" style="height:38px; display:inline-flex; align-items:center; justify-content:center; padding:0 16px; border:1px solid #e5e7eb; border-radius:6px; color:#4b5563; text-decoration:none; font-size:12px; font-weight:600; background:#ffffff;">
                                     Limpiar
                                 </a>
                             <?php endif; ?>
                         </div>
                     </form>
 
-                    <div class="card">
+                    <div class="card" id="citasCard">
                         <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                             <span>Control de Citas</span>
                             <div style="display:inline-flex; background:#f1f5f9; padding:3px; border-radius:8px; gap:4px;">
@@ -1154,7 +1199,7 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
 
                 <?php elseif ($page == 'clientes'): ?>
                     <!-- FILTERS -->
-                    <form method="GET" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px; align-items:flex-end;">
+                    <form method="GET" id="filterClientesForm" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px; align-items:flex-end;">
                         <input type="hidden" name="page" value="clientes">
                         <?php if (isset($_GET['suc'])): ?>
                             <input type="hidden" name="suc" value="<?php echo htmlspecialchars($_GET['suc']); ?>">
@@ -1162,32 +1207,29 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                         
                         <div style="flex: 1; min-width: 200px;">
                             <label style="font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px; display:block;">Buscar Nombre/Teléfono</label>
-                            <input type="text" name="q" class="form-input" placeholder="Nombre o teléfono..." value="<?php echo htmlspecialchars($_GET['q'] ?? ''); ?>" style="font-size:12px; padding:8px 12px; height:38px;">
+                            <input type="text" name="q" id="q" class="form-input" placeholder="Escribe para buscar..." value="<?php echo htmlspecialchars($_GET['q'] ?? ''); ?>" autocomplete="off" style="font-size:12px; padding:8px 12px; height:38px;">
                         </div>
                         
                         <div style="width: 150px;">
                             <label style="font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px; display:block;">Mínimo de Citas</label>
-                            <input type="number" name="min_citas" class="form-input" placeholder="Ej. 1" min="0" value="<?php echo htmlspecialchars($_GET['min_citas'] ?? ''); ?>" style="font-size:12px; padding:8px 12px; height:38px;">
+                            <input type="number" name="min_citas" id="min_citas" class="form-input" placeholder="Ej. 1" min="0" value="<?php echo htmlspecialchars($_GET['min_citas'] ?? ''); ?>" style="font-size:12px; padding:8px 12px; height:38px;">
                         </div>
 
                         <div style="width: 180px;">
                             <label style="font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px; display:block;">Última visita desde</label>
-                            <input type="date" name="fecha_desde" class="form-input" value="<?php echo htmlspecialchars($_GET['fecha_desde'] ?? ''); ?>" style="font-size:12px; padding:8px 12px; height:38px;">
+                            <input type="date" name="fecha_desde" id="fecha_desde" class="form-input" value="<?php echo htmlspecialchars($_GET['fecha_desde'] ?? ''); ?>" style="font-size:12px; padding:8px 12px; height:38px;">
                         </div>
 
-                        <div style="display:flex; gap:8px;">
-                            <button type="submit" class="btn btn-primary" style="height:38px; padding:0 16px; background:#b49363; border-color:#b49363; color:white; font-size:12px; font-weight:600; border-radius:6px; cursor:pointer;">
-                                <i class="fas fa-filter" style="margin-right:6px;"></i> Filtrar
-                            </button>
+                        <div id="clientesClearWrap" style="display:flex; gap:8px;">
                             <?php if (!empty($_GET['q']) || !empty($_GET['min_citas']) || !empty($_GET['fecha_desde'])): ?>
-                                <a href="?page=clientes" class="btn" style="height:38px; display:inline-flex; align-items:center; justify-content:center; padding:0 16px; border:1px solid #e5e7eb; border-radius:6px; color:#4b5563; text-decoration:none; font-size:12px; font-weight:600; background:#ffffff;">
+                                <a href="?page=clientes<?php echo isset($_GET['suc']) ? '&suc='.htmlspecialchars($_GET['suc']) : ''; ?>" class="btn" style="height:38px; display:inline-flex; align-items:center; justify-content:center; padding:0 16px; border:1px solid #e5e7eb; border-radius:6px; color:#4b5563; text-decoration:none; font-size:12px; font-weight:600; background:#ffffff;">
                                     Limpiar
                                 </a>
                             <?php endif; ?>
                         </div>
                     </form>
 
-                    <div class="card">
+                    <div class="card" id="clientesCard">
                         <div class="card-header">Clientes Registrados</div>
                         <div class="card-content">
                             <table>
@@ -2568,9 +2610,105 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
             }
         }
 
+        function setupLiveFilter(formId, targetContainerId, clearWrapId) {
+            const form = document.getElementById(formId);
+            if (!form) return;
+
+            let debounceTimer = null;
+            let abortController = null;
+
+            function doFilter() {
+                if (abortController) {
+                    abortController.abort();
+                }
+                abortController = new AbortController();
+
+                const formData = new FormData(form);
+                const cleanParams = new URLSearchParams();
+                for (const [key, val] of formData.entries()) {
+                    if (val !== '' && val !== 'todos') {
+                        cleanParams.set(key, val);
+                    } else if (key === 'page' || key === 'suc') {
+                        cleanParams.set(key, val);
+                    }
+                }
+
+                const newUrl = window.location.pathname + '?' + cleanParams.toString();
+                window.history.replaceState(null, '', newUrl);
+
+                const targetEl = document.getElementById(targetContainerId);
+                if (targetEl) targetEl.style.opacity = '0.45';
+
+                fetch(newUrl, { signal: abortController.signal })
+                    .then(res => res.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+
+                        const newTarget = doc.getElementById(targetContainerId);
+                        const currentTarget = document.getElementById(targetContainerId);
+                        if (newTarget && currentTarget) {
+                            currentTarget.innerHTML = newTarget.innerHTML;
+                            currentTarget.style.opacity = '1';
+                        }
+
+                        if (clearWrapId) {
+                            const newClear = doc.getElementById(clearWrapId);
+                            const currentClear = document.getElementById(clearWrapId);
+                            if (newClear && currentClear) {
+                                currentClear.innerHTML = newClear.innerHTML;
+                            }
+                        }
+
+                        if (typeof setAppointmentsView === 'function' && targetContainerId === 'citasCard') {
+                            const savedView = localStorage.getItem('admin_citas_view') || 'list';
+                            setAppointmentsView(savedView);
+                        }
+
+                        if (window.AlCorte && typeof AlCorte.bindApiForms === 'function') {
+                            AlCorte.bindApiForms('form[action$="api/v1/admin"]', 'admin');
+                        }
+                    })
+                    .catch(err => {
+                        if (err.name !== 'AbortError') {
+                            if (targetEl) targetEl.style.opacity = '1';
+                        }
+                    });
+            }
+
+            form.querySelectorAll('input[type="text"], input[type="number"]').forEach(input => {
+                input.addEventListener('input', function() {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(doFilter, 350);
+                });
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        clearTimeout(debounceTimer);
+                        doFilter();
+                    }
+                });
+            });
+
+            form.querySelectorAll('select, input[type="date"]').forEach(el => {
+                el.addEventListener('change', function() {
+                    clearTimeout(debounceTimer);
+                    doFilter();
+                });
+            });
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                clearTimeout(debounceTimer);
+                doFilter();
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const savedView = localStorage.getItem('admin_citas_view') || 'list';
             setAppointmentsView(savedView);
+            setupLiveFilter('filterCitasForm', 'citasCard', 'citasClearWrap');
+            setupLiveFilter('filterClientesForm', 'clientesCard', 'clientesClearWrap');
             if (window.AlCorte) {
                 AlCorte.bindApiForms('form[action$="api/v1/admin"]', 'admin');
             }

@@ -1,5 +1,5 @@
 <?php
-require_once '../config/config.php';
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../api/helpers.php';
 
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {

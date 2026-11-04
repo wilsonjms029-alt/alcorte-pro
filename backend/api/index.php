@@ -18,6 +18,13 @@ $resource = $parts[0] ?? '';
 $sub = $parts[1] ?? '';
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$input = api_input();
+if (!empty($input)) {
+    if (empty($_POST)) {
+        $_POST = $input;
+    }
+    $_REQUEST = array_merge($_REQUEST, $input);
+}
 
 try {
     switch ($resource) {

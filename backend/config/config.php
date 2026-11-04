@@ -302,3 +302,22 @@ function get_plan_sucursal(mysqli $conn, int $sucursal_id): ?array {
         'has_productos'      => $nivel >= 3,
     ];
 }
+
+
+// ─────────── Información detallada de Suscripción ───────────
+function get_suscripcion_info(mysqli $conn, int $sucursal_id): ?array {
+    $stmt = $conn->prepare(
+        "SELECT s.id, s.plan_id, s.fecha_inicio, s.fecha_vencimiento, s.estado,
+                p.nombre as plan_nombre, p.nivel, p.precio_mensual,
+                DATEDIFF(s.fecha_vencimiento, CURDATE()) as dias_restantes
+         FROM suscripciones s
+         JOIN planes p ON s.plan_id = p.id
+         WHERE s.sucursal_id = ?
+         ORDER BY s.id DESC LIMIT 1"
+    );
+    $stmt->bind_param('i', $sucursal_id);
+    $stmt->execute();
+    $sub = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $sub ?: null;
+}

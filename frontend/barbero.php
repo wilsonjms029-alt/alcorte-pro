@@ -841,7 +841,7 @@ $stmt_kpi->close();
         });
         document.addEventListener('DOMContentLoaded', function () {
             if (window.AlCorte) {
-                AlCorte.bindApiForms('form[action$="api/v1/barbero"]', '');
+                AlCorte.bindApiForms('form[action$="api/v1/barbero"]', 'barbero');
             }
         });
     </script>

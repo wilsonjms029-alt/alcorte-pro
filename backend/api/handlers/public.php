@@ -46,6 +46,9 @@ if ($action === 'agendar' && $method === 'POST') {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || $fecha < date('Y-m-d')) {
         api_err('La fecha no puede ser anterior a hoy.');
     }
+    if ($fecha > date('Y-m-d', strtotime('+7 days'))) {
+        api_err('Solo puedes reservar con un máximo de 7 días de anticipación.');
+    }
 
     $stmt_b = $conn->prepare(
         'SELECT nombre, hora_inicio, hora_fin, almuerzo_inicio, almuerzo_fin, sucursal_id FROM barberos WHERE id = ? AND activo = 1'
