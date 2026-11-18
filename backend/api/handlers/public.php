@@ -219,7 +219,7 @@ if ($action === 'validar_codigo_promotor') {
         api_err('Ingresa un código de invitación', 400);
     }
 
-    $stmt = $conn->prepare('SELECT id, nombre, cargo, codigo_invitacion, porcentaje_comision, activo FROM promotores WHERE UPPER(codigo_invitacion) = ? AND activo = 1 LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, nombre, cargo, codigo_invitacion, porcentaje_descuento, porcentaje_comision, activo FROM promotores WHERE UPPER(codigo_invitacion) = ? AND activo = 1 LIMIT 1');
     $stmt->bind_param('s', $codigo);
     $stmt->execute();
     $promotor = $stmt->get_result()->fetch_assoc();
@@ -229,14 +229,19 @@ if ($action === 'validar_codigo_promotor') {
         api_err('El código de invitación no es válido o está inactivo.', 404);
     }
 
+    $desc_pct = isset($promotor['porcentaje_descuento']) ? floatval($promotor['porcentaje_descuento']) : 10.00;
+    $com_pct  = isset($promotor['porcentaje_comision']) ? floatval($promotor['porcentaje_comision']) : 15.00;
+    $desc_str = rtrim(rtrim(number_format($desc_pct, 2), '0'), '.');
+
     api_ok([
         'valido' => true,
         'codigo' => $promotor['codigo_invitacion'],
         'promotor_id' => (int) $promotor['id'],
         'promotor_nombre' => $promotor['nombre'],
         'cargo' => $promotor['cargo'],
-        'descuento_porcentaje' => 10.00,
-        'mensaje' => '¡Código de ' . $promotor['nombre'] . ' (' . $promotor['cargo'] . ') aplicado! Tienes 10% de DESCUENTO en tu plan.'
+        'descuento_porcentaje' => $desc_pct,
+        'comision_porcentaje' => $com_pct,
+        'mensaje' => '¡Código de ' . $promotor['nombre'] . ' (' . $promotor['cargo'] . ') aplicado! Tienes ' . $desc_str . '% de DESCUENTO en tu plan.'
     ], 'Código verificado');
 }
 

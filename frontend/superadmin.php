@@ -590,16 +590,26 @@ $plan_colors = [
                         </div>
                         <div class="form-group">
                             <label class="form-label"><i class="fas fa-user-tag" style="color:#d4af37;margin-right:4px"></i> Promotor(a) de Campo / Código de Invitación</label>
-                            <select id="shop_promotor_id" name="promotor_id" class="form-select">
-                                <option value="">— Ninguno (Entrada Directa / Sin Promoción) —</option>
+                            <select id="shop_promotor_id" name="promotor_id" class="form-select" onchange="onPromotorSelectChange()">
+                                <option value="" data-descuento="0">— Ninguno (Entrada Directa / Sin Promoción) —</option>
                                 <?php foreach ($promotores_arr as $prm): if ($prm['activo']): ?>
-                                <option value="<?php echo $prm['id']; ?>">
-                                    <?php echo htmlspecialchars($prm['nombre'] . ' (' . $prm['cargo'] . ') — Código: ' . $prm['codigo_invitacion'] . ' [10% Descuento Tienda | ' . $prm['porcentaje_comision'] . '% Comisión]'); ?>
+                                <option value="<?php echo $prm['id']; ?>" data-descuento="<?php echo floatval($prm['porcentaje_descuento'] ?? 10.00); ?>">
+                                    <?php echo htmlspecialchars($prm['nombre'] . ' (' . $prm['cargo'] . ') — Código: ' . $prm['codigo_invitacion'] . ' [' . number_format((float)($prm['porcentaje_descuento'] ?? 10), 0) . '% Descuento Tienda | ' . number_format((float)$prm['porcentaje_comision'], 0) . '% Comisión]'); ?>
                                 </option>
                                 <?php endif; endforeach; ?>
                             </select>
                             <div style="font-size:11px;color:#64748b;margin-top:4px">
-                                <i class="fas fa-info-circle"></i> Si la tienda fue captada por un/a promotor/a, recibe automáticamente un <strong>10% de descuento</strong> en el alquiler mensual de su plan, y el promotor acumula su comisión.
+                                <i class="fas fa-info-circle"></i> Al seleccionar un/a promotor/a, se aplica su porcentaje de descuento en el alquiler mensual y acumula su comisión.
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-tags" style="color:#059669;margin-right:4px"></i> % Descuento en Alquiler</label>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <input type="number" step="0.01" min="0" max="100" id="shop_descuento" name="descuento_porcentaje" class="form-input" value="0.00" style="font-weight:800;color:#059669">
+                                <span style="font-weight:900;color:#059669;font-size:16px">%</span>
+                            </div>
+                            <div style="font-size:11px;color:#64748b;margin-top:4px">
+                                <i class="fas fa-info-circle"></i> Se carga automáticamente al elegir el promotor, o puedes fijar un % personalizado para esta tienda.
                             </div>
                         </div>
                         <div style="display:flex;gap:8px">
@@ -687,7 +697,7 @@ $plan_colors = [
                             <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                                 <?php if (!empty($s['promotor_id']) || !empty($s['codigo_promotor'])): ?>
                                     <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
-                                        <i class="fas fa-tag"></i> Promotor/a: <strong><?php echo htmlspecialchars($s['promotor_nombre'] ?? $s['codigo_promotor']); ?></strong> (10% Desc. Aplicado)
+                                        <i class="fas fa-tag"></i> Promotor/a: <strong><?php echo htmlspecialchars($s['promotor_nombre'] ?? $s['codigo_promotor']); ?></strong> (-<?php echo number_format((float)($s['descuento_porcentaje'] ?? 10), 1); ?>% Desc.)
                                     </span>
                                 <?php else: ?>
                                     <span style="font-size:11px;font-weight:600;background:#f8fafc;color:#94a3b8;border:1px solid #e2e8f0;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
@@ -698,7 +708,7 @@ $plan_colors = [
                         </div>
                         <!-- Acciones rápidas -->
                         <div style="display:flex;gap:5px;flex-shrink:0">
-                            <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>', <?php echo intval($s['promotor_id'] ?? 0); ?>)" class="btn btn-ghost btn-sm" title="Editar tienda"><i class="fas fa-pen"></i></button>
+                            <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>', <?php echo intval($s['promotor_id'] ?? 0); ?>, <?php echo floatval($s['descuento_porcentaje'] ?? 0); ?>)" class="btn btn-ghost btn-sm" title="Editar tienda"><i class="fas fa-pen"></i></button>
                             <form action="../api/v1/superadmin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda y toda su data?')">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" name="action" value="delete_sucursal">
@@ -1028,11 +1038,18 @@ $plan_colors = [
                 resetSucForm();
             }
         }
-        function editSuc(id,nombre,dir,promotor_id){
+        function onPromotorSelectChange() {
+            const sel = document.getElementById('shop_promotor_id');
+            const opt = sel.options[sel.selectedIndex];
+            const desc = opt ? opt.getAttribute('data-descuento') : '0';
+            document.getElementById('shop_descuento').value = parseFloat(desc || 0).toFixed(2);
+        }
+        function editSuc(id,nombre,dir,promotor_id,descuento){
             document.getElementById('shop_id').value=id;
             document.getElementById('shop_name').value=nombre;
             document.getElementById('shop_address').value=dir;
             document.getElementById('shop_promotor_id').value = promotor_id || '';
+            document.getElementById('shop_descuento').value = (descuento !== undefined && descuento !== null) ? parseFloat(descuento).toFixed(2) : '0.00';
             document.getElementById('shop_action').value='edit_sucursal';
             document.querySelector('#suc-form-title h3').textContent='Editar Tienda';
             
@@ -1050,6 +1067,7 @@ $plan_colors = [
             document.getElementById('shop_name').value='';
             document.getElementById('shop_address').value='';
             document.getElementById('shop_promotor_id').value='';
+            document.getElementById('shop_descuento').value='0.00';
             document.getElementById('shop_action').value='add_sucursal';
             document.querySelector('#suc-form-title h3').textContent='Registrar Tienda';
             

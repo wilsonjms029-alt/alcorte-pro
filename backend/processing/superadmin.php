@@ -3,125 +3,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../api/helpers.php';
 
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
-    
-// --- EQUIPO Y PROMOTORES ---
-if ($action == 'add_promotor') {
-    if (!csrf_validate()) {
-        api_superadmin_finish('Error de seguridad', 'equipo');
-    }
-    csrf_regenerate();
-    $nombre    = trim($_POST['nombre'] ?? '');
-    $documento = trim($_POST['documento'] ?? '');
-    $telefono  = trim($_POST['telefono'] ?? '');
-    $email     = trim($_POST['email'] ?? '');
-    $cargo     = trim($_POST['cargo'] ?? 'Promotor/a');
-    $codigo    = strtoupper(preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($_POST['codigo_invitacion'] ?? '')));
-    $comision  = floatval($_POST['porcentaje_comision'] ?? 15.00);
-    $notas     = trim($_POST['notas'] ?? '');
-
-    if ($nombre === '' || $codigo === '') {
-        api_superadmin_finish('Nombre y código de invitación requeridos', 'equipo');
-    }
-
-    $chk = $conn->prepare('SELECT id FROM promotores WHERE UPPER(codigo_invitacion) = ?');
-    $chk->bind_param('s', $codigo);
-    $chk->execute();
-    if ($chk->get_result()->num_rows > 0) {
-        $chk->close();
-        api_superadmin_finish('El código de invitación ya está en uso', 'equipo');
-    }
-    $chk->close();
-
-    $stmt = $conn->prepare('INSERT INTO promotores (nombre, documento, telefono, email, cargo, codigo_invitacion, porcentaje_comision, notas, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)');
-    $stmt->bind_param('ssssssds', $nombre, $documento, $telefono, $email, $cargo, $codigo, $comision, $notas);
-    $stmt->execute();
-    $stmt->close();
-
-    api_superadmin_finish('Miembro del equipo registrado con éxito', 'equipo');
-}
-
-if ($action == 'edit_promotor') {
-    if (!csrf_validate()) {
-        api_superadmin_finish('Error de seguridad', 'equipo');
-    }
-    csrf_regenerate();
-    $id        = intval($_POST['id']);
-    $nombre    = trim($_POST['nombre'] ?? '');
-    $documento = trim($_POST['documento'] ?? '');
-    $telefono  = trim($_POST['telefono'] ?? '');
-    $email     = trim($_POST['email'] ?? '');
-    $cargo     = trim($_POST['cargo'] ?? 'Promotor/a');
-    $codigo    = strtoupper(preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($_POST['codigo_invitacion'] ?? '')));
-    $comision  = floatval($_POST['porcentaje_comision'] ?? 15.00);
-    $activo    = isset($_POST['activo']) ? intval($_POST['activo']) : 1;
-    $notas     = trim($_POST['notas'] ?? '');
-
-    $chk = $conn->prepare('SELECT id FROM promotores WHERE UPPER(codigo_invitacion) = ? AND id != ?');
-    $chk->bind_param('si', $codigo, $id);
-    $chk->execute();
-    if ($chk->get_result()->num_rows > 0) {
-        $chk->close();
-        api_superadmin_finish('El código de invitación ya está en uso por otro miembro', 'equipo');
-    }
-    $chk->close();
-
-    $stmt = $conn->prepare('UPDATE promotores SET nombre=?, documento=?, telefono=?, email=?, cargo=?, codigo_invitacion=?, porcentaje_comision=?, activo=?, notas=? WHERE id=?');
-    $stmt->bind_param('ssssssdisi', $nombre, $documento, $telefono, $email, $cargo, $codigo, $comision, $activo, $notas, $id);
-    $stmt->execute();
-    $stmt->close();
-
-    api_superadmin_finish('Miembro del equipo actualizado', 'equipo');
-}
-
-if ($action == 'delete_promotor') {
-    if (!csrf_validate()) {
-        api_superadmin_finish('Error de seguridad', 'equipo');
-    }
-    csrf_regenerate();
-    $id = intval($_POST['id']);
-    $stmt = $conn->prepare('DELETE FROM promotores WHERE id = ?');
-    $stmt->bind_param('i', $id);
-    $stmt->execute();
-    $stmt->close();
-
-    api_superadmin_finish('Miembro eliminado del equipo', 'equipo');
-}
-
-if ($action == 'add_cargo') {
-    if (!csrf_validate()) {
-        api_superadmin_finish('Error de seguridad', 'equipo');
-    }
-    csrf_regenerate();
-    $nombre_cargo = trim($_POST['nombre_cargo'] ?? '');
-    $desc         = trim($_POST['descripcion_cargo'] ?? '');
-
-    if ($nombre_cargo !== '') {
-        $stmt = $conn->prepare('INSERT IGNORE INTO cargos_equipo (nombre, descripcion) VALUES (?, ?)');
-        $stmt->bind_param('ss', $nombre_cargo, $desc);
-        $stmt->execute();
-        $stmt->close();
-    }
-
-    api_superadmin_finish('Nuevo cargo creado con éxito', 'equipo');
-}
-
-if ($action == 'pagar_comision') {
-    if (!csrf_validate()) {
-        api_superadmin_finish('Error de seguridad', 'equipo');
-    }
-    csrf_regenerate();
-    $comision_id = intval($_POST['comision_id']);
-    $referencia  = trim($_POST['referencia_pago'] ?? 'Pago procesado');
-
-    $stmt = $conn->prepare("UPDATE comisiones_promotores SET estado = 'pagado', fecha_pago_comision = CURDATE(), referencia_pago = ? WHERE id = ?");
-    $stmt->bind_param('si', $referencia, $comision_id);
-    $stmt->execute();
-    $stmt->close();
-
-    api_superadmin_finish('Comisión marcada como pagada al promotor', 'equipo');
-}
-
-if (defined('ALCORTE_API_REQUEST')) {
+    if (defined('ALCORTE_API_REQUEST')) {
         api_err('No autorizado', 401);
     }
     header('Location: ../../');
@@ -142,10 +24,11 @@ if ($action == 'add_sucursal') {
 
     $promotor_id = !empty($_POST['promotor_id']) ? intval($_POST['promotor_id']) : null;
     $codigo_promotor = strtoupper(trim($_POST['codigo_promotor'] ?? ''));
-    $descuento_pct = 0.00;
+    $has_custom_desc = isset($_POST['descuento_porcentaje']) && trim((string)$_POST['descuento_porcentaje']) !== '';
+    $descuento_pct = $has_custom_desc ? floatval($_POST['descuento_porcentaje']) : 0.00;
 
     if ($codigo_promotor !== '') {
-        $chk_p = $conn->prepare('SELECT id, codigo_invitacion FROM promotores WHERE UPPER(codigo_invitacion) = ? AND activo = 1 LIMIT 1');
+        $chk_p = $conn->prepare('SELECT id, codigo_invitacion, porcentaje_descuento FROM promotores WHERE UPPER(codigo_invitacion) = ? AND activo = 1 LIMIT 1');
         $chk_p->bind_param('s', $codigo_promotor);
         $chk_p->execute();
         $p_row = $chk_p->get_result()->fetch_assoc();
@@ -153,17 +36,21 @@ if ($action == 'add_sucursal') {
         if ($p_row) {
             $promotor_id = (int)$p_row['id'];
             $codigo_promotor = $p_row['codigo_invitacion'];
-            $descuento_pct = 10.00;
+            if (!$has_custom_desc) {
+                $descuento_pct = floatval($p_row['porcentaje_descuento'] ?? 10.00);
+            }
         }
     } elseif ($promotor_id) {
-        $chk_p = $conn->prepare('SELECT codigo_invitacion FROM promotores WHERE id = ? AND activo = 1 LIMIT 1');
+        $chk_p = $conn->prepare('SELECT codigo_invitacion, porcentaje_descuento FROM promotores WHERE id = ? AND activo = 1 LIMIT 1');
         $chk_p->bind_param('i', $promotor_id);
         $chk_p->execute();
         $p_row = $chk_p->get_result()->fetch_assoc();
         $chk_p->close();
         if ($p_row) {
             $codigo_promotor = $p_row['codigo_invitacion'];
-            $descuento_pct = 10.00;
+            if (!$has_custom_desc) {
+                $descuento_pct = floatval($p_row['porcentaje_descuento'] ?? 10.00);
+            }
         }
     }
 
@@ -171,7 +58,7 @@ if ($action == 'add_sucursal') {
     $stmt->bind_param('sssids', $nombre, $direccion, $token, $promotor_id, $descuento_pct, $codigo_promotor);
     $stmt->execute();
     $stmt->close();
-    api_superadmin_finish('Tienda registrada con éxito' . ($descuento_pct > 0 ? ' (10% de descuento por promotor aplicado)' : ''), 'barbershops');
+    api_superadmin_finish('Tienda registrada con éxito' . ($descuento_pct > 0 ? " ($descuento_pct% de descuento por promotor aplicado)" : ''), 'barbershops');
 }
 
 if ($action == 'edit_sucursal') {
@@ -185,10 +72,11 @@ if ($action == 'edit_sucursal') {
 
     $promotor_id = !empty($_POST['promotor_id']) ? intval($_POST['promotor_id']) : null;
     $codigo_promotor = strtoupper(trim($_POST['codigo_promotor'] ?? ''));
-    $descuento_pct = 0.00;
+    $has_custom_desc = isset($_POST['descuento_porcentaje']) && trim((string)$_POST['descuento_porcentaje']) !== '';
+    $descuento_pct = $has_custom_desc ? floatval($_POST['descuento_porcentaje']) : 0.00;
 
     if ($codigo_promotor !== '') {
-        $chk_p = $conn->prepare('SELECT id, codigo_invitacion FROM promotores WHERE UPPER(codigo_invitacion) = ? AND activo = 1 LIMIT 1');
+        $chk_p = $conn->prepare('SELECT id, codigo_invitacion, porcentaje_descuento FROM promotores WHERE UPPER(codigo_invitacion) = ? AND activo = 1 LIMIT 1');
         $chk_p->bind_param('s', $codigo_promotor);
         $chk_p->execute();
         $p_row = $chk_p->get_result()->fetch_assoc();
@@ -196,17 +84,21 @@ if ($action == 'edit_sucursal') {
         if ($p_row) {
             $promotor_id = (int)$p_row['id'];
             $codigo_promotor = $p_row['codigo_invitacion'];
-            $descuento_pct = 10.00;
+            if (!$has_custom_desc) {
+                $descuento_pct = floatval($p_row['porcentaje_descuento'] ?? 10.00);
+            }
         }
     } elseif ($promotor_id) {
-        $chk_p = $conn->prepare('SELECT codigo_invitacion FROM promotores WHERE id = ? AND activo = 1 LIMIT 1');
+        $chk_p = $conn->prepare('SELECT codigo_invitacion, porcentaje_descuento FROM promotores WHERE id = ? AND activo = 1 LIMIT 1');
         $chk_p->bind_param('i', $promotor_id);
         $chk_p->execute();
         $p_row = $chk_p->get_result()->fetch_assoc();
         $chk_p->close();
         if ($p_row) {
             $codigo_promotor = $p_row['codigo_invitacion'];
-            $descuento_pct = 10.00;
+            if (!$has_custom_desc) {
+                $descuento_pct = floatval($p_row['porcentaje_descuento'] ?? 10.00);
+            }
         }
     }
 
@@ -214,7 +106,7 @@ if ($action == 'edit_sucursal') {
     $stmt->bind_param('ssidsi', $nombre, $direccion, $promotor_id, $descuento_pct, $codigo_promotor, $id);
     $stmt->execute();
     $stmt->close();
-    api_superadmin_finish('Tienda actualizada', 'barbershops');
+    api_superadmin_finish('Tienda actualizada' . ($descuento_pct > 0 ? " ($descuento_pct% de descuento asignado)" : ''), 'barbershops');
 }
 
 if ($action == 'delete_sucursal') {
@@ -369,7 +261,12 @@ if ($action == 'assign_plan') {
     $promotor_id   = !empty($suc_info['promotor_id']) ? intval($suc_info['promotor_id']) : null;
     $descuento_pct = !empty($suc_info['descuento_porcentaje']) ? floatval($suc_info['descuento_porcentaje']) : 0.00;
     if ($promotor_id && $descuento_pct <= 0) {
-        $descuento_pct = 10.00;
+        $chk_p = $conn->prepare('SELECT porcentaje_descuento FROM promotores WHERE id = ?');
+        $chk_p->bind_param('i', $promotor_id);
+        $chk_p->execute();
+        $p_desc_row = $chk_p->get_result()->fetch_assoc();
+        $chk_p->close();
+        $descuento_pct = $p_desc_row ? floatval($p_desc_row['porcentaje_descuento']) : 10.00;
     }
 
     $monto = round($precio_base * (1 - ($descuento_pct / 100)), 2);
@@ -379,7 +276,7 @@ if ($action == 'assign_plan') {
         $nota_completa = $pago_notas;
         if ($descuento_pct > 0) {
             $cod_p = $suc_info['codigo_promotor'] ?? '';
-            $nota_completa = trim($nota_completa . " [10% Descuento Promotor ($cod_p)]");
+            $nota_completa = trim($nota_completa . " [{$descuento_pct}% Descuento Promotor ($cod_p)]");
         }
         $sp = $conn->prepare(
             'INSERT INTO pagos_suscripcion (sucursal_id, plan_id, monto, fecha_pago, metodo, referencia, notas, registrado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
@@ -533,6 +430,7 @@ if ($action == 'add_promotor') {
     $email     = trim($_POST['email'] ?? '');
     $cargo     = trim($_POST['cargo'] ?? 'Promotor/a');
     $codigo    = strtoupper(preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($_POST['codigo_invitacion'] ?? '')));
+    $descuento = floatval($_POST['porcentaje_descuento'] ?? 10.00);
     $comision  = floatval($_POST['porcentaje_comision'] ?? 15.00);
     $notas     = trim($_POST['notas'] ?? '');
 
@@ -549,8 +447,8 @@ if ($action == 'add_promotor') {
     }
     $chk->close();
 
-    $stmt = $conn->prepare('INSERT INTO promotores (nombre, documento, telefono, email, cargo, codigo_invitacion, porcentaje_comision, notas, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)');
-    $stmt->bind_param('ssssssds', $nombre, $documento, $telefono, $email, $cargo, $codigo, $comision, $notas);
+    $stmt = $conn->prepare('INSERT INTO promotores (nombre, documento, telefono, email, cargo, codigo_invitacion, porcentaje_descuento, porcentaje_comision, notas, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
+    $stmt->bind_param('ssssssdds', $nombre, $documento, $telefono, $email, $cargo, $codigo, $descuento, $comision, $notas);
     $stmt->execute();
     $stmt->close();
 
@@ -569,6 +467,7 @@ if ($action == 'edit_promotor') {
     $email     = trim($_POST['email'] ?? '');
     $cargo     = trim($_POST['cargo'] ?? 'Promotor/a');
     $codigo    = strtoupper(preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($_POST['codigo_invitacion'] ?? '')));
+    $descuento = floatval($_POST['porcentaje_descuento'] ?? 10.00);
     $comision  = floatval($_POST['porcentaje_comision'] ?? 15.00);
     $activo    = isset($_POST['activo']) ? intval($_POST['activo']) : 1;
     $notas     = trim($_POST['notas'] ?? '');
@@ -582,8 +481,8 @@ if ($action == 'edit_promotor') {
     }
     $chk->close();
 
-    $stmt = $conn->prepare('UPDATE promotores SET nombre=?, documento=?, telefono=?, email=?, cargo=?, codigo_invitacion=?, porcentaje_comision=?, activo=?, notas=? WHERE id=?');
-    $stmt->bind_param('ssssssdisi', $nombre, $documento, $telefono, $email, $cargo, $codigo, $comision, $activo, $notas, $id);
+    $stmt = $conn->prepare('UPDATE promotores SET nombre=?, documento=?, telefono=?, email=?, cargo=?, codigo_invitacion=?, porcentaje_descuento=?, porcentaje_comision=?, activo=?, notas=? WHERE id=?');
+    $stmt->bind_param('ssssssddisi', $nombre, $documento, $telefono, $email, $cargo, $codigo, $descuento, $comision, $activo, $notas, $id);
     $stmt->execute();
     $stmt->close();
 

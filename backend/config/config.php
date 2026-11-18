@@ -213,11 +213,17 @@ try {
         email VARCHAR(150) DEFAULT '',
         cargo VARCHAR(100) NOT NULL DEFAULT 'Promotor/a',
         codigo_invitacion VARCHAR(50) NOT NULL UNIQUE,
+        porcentaje_descuento DECIMAL(5,2) NOT NULL DEFAULT 10.00,
         porcentaje_comision DECIMAL(5,2) NOT NULL DEFAULT 15.00,
         activo TINYINT(1) NOT NULL DEFAULT 1,
         notas TEXT DEFAULT NULL,
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $cpd = $conn->query("SHOW COLUMNS FROM promotores LIKE 'porcentaje_descuento'");
+    if ($cpd && $cpd->num_rows === 0) {
+        $conn->query("ALTER TABLE promotores ADD COLUMN porcentaje_descuento DECIMAL(5,2) NOT NULL DEFAULT 10.00 AFTER codigo_invitacion");
+    }
 
     $c1 = $conn->query("SHOW COLUMNS FROM sucursales LIKE 'promotor_id'");
     if ($c1 && $c1->num_rows === 0) {

@@ -158,13 +158,24 @@ foreach ($promotores_arr as $prm) {
 
                 <div class="grid-equal" style="margin-bottom:14px">
                     <div class="form-group">
-                        <label class="form-label">Porcentaje de Comisión por Alquiler (%) *</label>
+                        <label class="form-label"><i class="fas fa-tags" style="color:#059669;margin-right:4px"></i> % Descuento para la Tienda *</label>
                         <div style="display:flex;align-items:center;gap:8px">
-                            <input type="number" step="0.01" min="0" max="100" id="prm_comision" name="porcentaje_comision" class="form-input" value="15.00" style="font-weight:800" required>
-                            <span style="font-weight:900;color:#64748b;font-size:16px">%</span>
+                            <input type="number" step="0.01" min="0" max="100" id="prm_descuento" name="porcentaje_descuento" class="form-input" value="10.00" style="font-weight:800;color:#059669" required>
+                            <span style="font-weight:900;color:#059669;font-size:16px">%</span>
                         </div>
-                        <small style="font-size:11px;color:#64748b">Porcentaje del pago del plan que le corresponde al promotor al concretar el alquiler.</small>
+                        <small style="font-size:11px;color:#64748b">Porcentaje de descuento que recibe la tienda al contratar con el código de este promotor.</small>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-percentage" style="color:#d97706;margin-right:4px"></i> % Comisión para el Promotor *</label>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <input type="number" step="0.01" min="0" max="100" id="prm_comision" name="porcentaje_comision" class="form-input" value="15.00" style="font-weight:800;color:#d97706" required>
+                            <span style="font-weight:900;color:#d97706;font-size:16px">%</span>
+                        </div>
+                        <small style="font-size:11px;color:#64748b">Porcentaje que le queda al promotor por cada alquiler mensual concretado.</small>
+                    </div>
+                </div>
+
+                <div class="grid-equal" style="margin-bottom:14px">
                     <div class="form-group" id="grp_prm_activo" style="display:none">
                         <label class="form-label">Estado del Promotor</label>
                         <select id="prm_activo" name="activo" class="form-select">
@@ -172,11 +183,10 @@ foreach ($promotores_arr as $prm) {
                             <option value="0">Inactivo (Pausado)</option>
                         </select>
                     </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom:18px">
-                    <label class="form-label">Notas / Observaciones</label>
-                    <textarea id="prm_notas" name="notas" class="form-textarea" placeholder="Zona de trabajo asignada, acuerdos especiales, etc." style="height:70px"></textarea>
+                    <div class="form-group">
+                        <label class="form-label">Notas / Observaciones</label>
+                        <input type="text" id="prm_notas" name="notas" class="form-input" placeholder="Zona de trabajo asignada, acuerdos especiales, etc.">
+                    </div>
                 </div>
 
                 <div style="display:flex;gap:10px">
@@ -209,7 +219,8 @@ foreach ($promotores_arr as $prm) {
                             <th style="padding:14px 18px">Miembro / Contacto</th>
                             <th style="padding:14px 18px">Cargo</th>
                             <th style="padding:14px 18px">Código Invitación</th>
-                            <th style="padding:14px 18px">Comisión</th>
+                            <th style="padding:14px 18px;text-align:center">% Desc. Tienda</th>
+                            <th style="padding:14px 18px;text-align:center">% Comisión</th>
                             <th style="padding:14px 18px;text-align:center">Tiendas</th>
                             <th style="padding:14px 18px">Total Ganado</th>
                             <th style="padding:14px 18px">Por Pagar</th>
@@ -246,9 +257,17 @@ foreach ($promotores_arr as $prm) {
                                     </button>
                                 </div>
                             </td>
-                            <td style="padding:14px 18px">
-                                <span style="font-weight:800;color:#0f172a"><?php echo number_format((float)($p['porcentaje_comision'] ?? 0), 1); ?>%</span>
-                                <div style="font-size:10px;color:#64748b">del alquiler</div>
+                            <td style="padding:14px 18px;text-align:center">
+                                <span style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;padding:3px 8px;border-radius:6px;font-weight:800;font-size:12px">
+                                    -<?php echo number_format((float)($p['porcentaje_descuento'] ?? 10), 1); ?>%
+                                </span>
+                                <div style="font-size:10px;color:#64748b;margin-top:2px">ahorro cliente</div>
+                            </td>
+                            <td style="padding:14px 18px;text-align:center">
+                                <span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:3px 8px;border-radius:6px;font-weight:800;font-size:12px">
+                                    <?php echo number_format((float)($p['porcentaje_comision'] ?? 15), 1); ?>%
+                                </span>
+                                <div style="font-size:10px;color:#64748b;margin-top:2px">pago promotor</div>
                             </td>
                             <td style="padding:14px 18px;text-align:center">
                                 <span style="background:#eff6ff;color:#1d4ed8;font-weight:900;padding:4px 10px;border-radius:999px;font-size:12px">
@@ -414,6 +433,7 @@ function resetPromotorForm() {
     document.getElementById('prmFormTitle').innerHTML = '<i class="fas fa-user-plus" style="color:#d4af37;margin-right:6px"></i> Registrar Nuevo Miembro del Equipo';
     document.getElementById('btnSubmitPrm').innerHTML = '<i class="fas fa-save"></i> Guardar Promotor';
     document.getElementById('grp_prm_activo').style.display = 'none';
+    document.getElementById('prm_descuento').value = '10.00';
     document.getElementById('prm_comision').value = '15.00';
 }
 
@@ -426,6 +446,7 @@ function editarPromotor(prm) {
     document.getElementById('prm_email').value = prm.email || '';
     document.getElementById('prm_cargo').value = prm.cargo || 'Promotor/a';
     document.getElementById('prm_codigo').value = prm.codigo_invitacion || '';
+    document.getElementById('prm_descuento').value = prm.porcentaje_descuento || '10.00';
     document.getElementById('prm_comision').value = prm.porcentaje_comision || '15.00';
     document.getElementById('prm_notas').value = prm.notas || '';
     document.getElementById('prm_activo').value = prm.activo || '1';

@@ -1693,7 +1693,7 @@ if (empty($planes)) {
                         </div>
                         <div id="promo_feedback" style="display:none; margin-top:8px; font-size:12px; padding:10px 14px; border-radius:10px;"></div>
                         <small style="color:#64748b; font-size:11px; margin-top:4px; display:block;">
-                            * El 10% de descuento aplica exclusivamente con el código de invitación entregado por un/a promotor/a en campo. Si entraste directo a la página web sin promotor, se aplica la tarifa estándar.
+                            * El descuento promocional aplica exclusivamente con el código de invitación entregado por un/a promotor/a en campo. Si entraste directo a la página web sin promotor, se aplica la tarifa estándar.
                         </small>
                     </div>
                 </div>
@@ -1975,10 +1975,11 @@ if (empty($planes)) {
                 .then(res => {
                     if (res.ok && res.data && res.data.valido) {
                         promoData = res.data;
+                        const descPct = parseFloat(res.data.descuento_porcentaje || 10);
                         fb.style.background = '#f0fdf4';
                         fb.style.color = '#15803d';
                         fb.style.border = '1px solid #bbf7d0';
-                        fb.innerHTML = `<i class="fas fa-check-circle"></i> <strong>¡Código Válido!</strong> Promotor(a): <strong>${res.data.promotor_nombre}</strong> (${res.data.cargo}).<br><span style="font-weight:700">Se ha aplicado un 10% de DESCUENTO en el alquiler de tu servicio.</span>`;
+                        fb.innerHTML = `<i class="fas fa-check-circle"></i> <strong>¡Código Válido!</strong> Promotor(a): <strong>${res.data.promotor_nombre}</strong> (${res.data.cargo}).<br><span style="font-weight:700">Se ha aplicado un ${descPct}% de DESCUENTO en el alquiler de tu servicio.</span>`;
                     } else {
                         promoData = null;
                         fb.style.background = '#fffbeb';
@@ -2003,10 +2004,11 @@ if (empty($planes)) {
             const planNombre = document.getElementById('f_plan').value;
 
             if (promoData && promoData.valido) {
-                const descMonto = basePrecio * 0.10;
+                const descPct = parseFloat(promoData.descuento_porcentaje || 10);
+                const descMonto = basePrecio * (descPct / 100);
                 const finalPrecio = (basePrecio - descMonto).toFixed(2);
                 document.getElementById('f_precio').value = finalPrecio;
-                document.getElementById('modalPlanTitle').innerHTML = `Plan ${planNombre} <span style="text-decoration:line-through;color:#94a3b8;font-size:14px;">$${basePrecio.toFixed(2)}</span> <span style="color:#10b981;font-weight:900;">$${finalPrecio}/mes</span> <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">10% OFF Promotor/a</span>`;
+                document.getElementById('modalPlanTitle').innerHTML = `Plan ${planNombre} <span style="text-decoration:line-through;color:#94a3b8;font-size:14px;">$${basePrecio.toFixed(2)}</span> <span style="color:#10b981;font-weight:900;">$${finalPrecio}/mes</span> <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">${descPct}% OFF Promotor/a</span>`;
             } else {
                 document.getElementById('f_precio').value = basePrecio.toFixed(2);
                 document.getElementById('modalPlanTitle').textContent = `Plan ${planNombre} ($${basePrecio.toFixed(2)}/mes)`;
@@ -2106,8 +2108,9 @@ if (empty($planes)) {
             let promoLine = '🌐 *Afiliación:* Registro Directo en Web (Tarifa Estándar)\n';
             if (promoData && promoData.valido) {
                 const baseP = parseFloat(document.getElementById('f_precio_base').value).toFixed(2);
+                const pct = parseFloat(promoData.descuento_porcentaje || 10);
                 promoLine = `🎁 *Código Promotora:* ${promoData.codigo} (${promoData.promotor_nombre})\n` +
-                            `🏷️ *Descuento Aplicado:* 10% OFF Promotor en Campo\n` +
+                            `🏷️ *Descuento Aplicado:* ${pct}% OFF Promotor en Campo\n` +
                             `💵 *Total con Descuento:* $${precio}/mes (Antes: $${baseP})\n`;
             }
 
