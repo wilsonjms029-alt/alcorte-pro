@@ -213,4 +213,31 @@ if ($action === 'pedido' && $method === 'POST') {
     }
 }
 
+if ($action === 'validar_codigo_promotor') {
+    $codigo = strtoupper(trim((string)($input['codigo'] ?? $_GET['codigo'] ?? '')));
+    if ($codigo === '') {
+        api_err('Ingresa un código de invitación', 400);
+    }
+
+    $stmt = $conn->prepare('SELECT id, nombre, cargo, codigo_invitacion, porcentaje_comision, activo FROM promotores WHERE UPPER(codigo_invitacion) = ? AND activo = 1 LIMIT 1');
+    $stmt->bind_param('s', $codigo);
+    $stmt->execute();
+    $promotor = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$promotor) {
+        api_err('El código de invitación no es válido o está inactivo.', 404);
+    }
+
+    api_ok([
+        'valido' => true,
+        'codigo' => $promotor['codigo_invitacion'],
+        'promotor_id' => (int) $promotor['id'],
+        'promotor_nombre' => $promotor['nombre'],
+        'cargo' => $promotor['cargo'],
+        'descuento_porcentaje' => 10.00,
+        'mensaje' => '¡Código de ' . $promotor['nombre'] . ' (' . $promotor['cargo'] . ') aplicado! Tienes 10% de DESCUENTO en tu plan.'
+    ], 'Código verificado');
+}
+
 api_err('Acción pública no válida', 400);

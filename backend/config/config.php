@@ -195,6 +195,63 @@ try {
         FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // Módulo de Equipo y Promotores
+    $conn->query("CREATE TABLE IF NOT EXISTS cargos_equipo (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL UNIQUE,
+        descripcion VARCHAR(255) DEFAULT '',
+        activo TINYINT(1) NOT NULL DEFAULT 1,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $conn->query("INSERT IGNORE INTO cargos_equipo (id, nombre, descripcion) VALUES (1, 'Promotor/a', 'Afiliación y captación de tiendas en campo')");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS promotores (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(150) NOT NULL,
+        documento VARCHAR(50) DEFAULT '',
+        telefono VARCHAR(50) DEFAULT '',
+        email VARCHAR(150) DEFAULT '',
+        cargo VARCHAR(100) NOT NULL DEFAULT 'Promotor/a',
+        codigo_invitacion VARCHAR(50) NOT NULL UNIQUE,
+        porcentaje_comision DECIMAL(5,2) NOT NULL DEFAULT 15.00,
+        activo TINYINT(1) NOT NULL DEFAULT 1,
+        notas TEXT DEFAULT NULL,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $c1 = $conn->query("SHOW COLUMNS FROM sucursales LIKE 'promotor_id'");
+    if ($c1 && $c1->num_rows === 0) {
+        $conn->query("ALTER TABLE sucursales ADD COLUMN promotor_id INT DEFAULT NULL AFTER token");
+    }
+    $c2 = $conn->query("SHOW COLUMNS FROM sucursales LIKE 'descuento_porcentaje'");
+    if ($c2 && $c2->num_rows === 0) {
+        $conn->query("ALTER TABLE sucursales ADD COLUMN descuento_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER promotor_id");
+    }
+    $c3 = $conn->query("SHOW COLUMNS FROM sucursales LIKE 'codigo_promotor'");
+    if ($c3 && $c3->num_rows === 0) {
+        $conn->query("ALTER TABLE sucursales ADD COLUMN codigo_promotor VARCHAR(50) DEFAULT NULL AFTER descuento_porcentaje");
+    }
+
+    $conn->query("CREATE TABLE IF NOT EXISTS comisiones_promotores (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        promotor_id INT NOT NULL,
+        sucursal_id INT NOT NULL,
+        pago_id INT DEFAULT NULL,
+        plan_id INT DEFAULT NULL,
+        monto_plan DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        descuento_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 10.00,
+        monto_pagado DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        comision_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 15.00,
+        monto_comision DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        estado ENUM('pendiente','pagado','cancelado') NOT NULL DEFAULT 'pendiente',
+        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_pago_comision DATE DEFAULT NULL,
+        referencia_pago VARCHAR(100) DEFAULT NULL,
+        notas VARCHAR(255) DEFAULT NULL,
+        INDEX idx_promotor (promotor_id),
+        INDEX idx_sucursal (sucursal_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 } catch (\Throwable $e) {
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);

@@ -1680,6 +1680,22 @@ if (empty($planes)) {
                         <label>WhatsApp de Contacto *</label>
                         <input type="tel" id="f_telefono" class="form-input-modal" placeholder="Ej. 0412 1234567" required>
                     </div>
+                    <div class="form-group-modal full" style="grid-column: span 2; margin-top: 6px;">
+                        <label style="display:flex; justify-content:space-between; align-items:center;">
+                            <span><i class="fas fa-ticket-alt" style="color:#d97706;"></i> ¿Fuiste visitado por un/a Promotor/a? (Código de Invitación)</span>
+                            <span style="font-size:11px; color:#10b981; font-weight:700;"><i class="fas fa-percent"></i> 10% Descuento Especial</span>
+                        </label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="f_codigo_promotor" class="form-input-modal" placeholder="Ej. VALERIA10, CARLOS10 (Déjalo vacío si entraste directo)" style="text-transform:uppercase; font-weight:700; letter-spacing:1px;" oninput="this.value = this.value.toUpperCase()">
+                            <button type="button" class="btn-check-code" onclick="validarCodigoPromotor()" style="background:#0f172a; color:#fff; border:none; padding:10px 18px; border-radius:10px; font-weight:700; font-size:12px; cursor:pointer; white-space:nowrap; transition:all 0.2s;">
+                                Aplicar Código
+                            </button>
+                        </div>
+                        <div id="promo_feedback" style="display:none; margin-top:8px; font-size:12px; padding:10px 14px; border-radius:10px;"></div>
+                        <small style="color:#64748b; font-size:11px; margin-top:4px; display:block;">
+                            * El 10% de descuento aplica exclusivamente con el código de invitación entregado por un/a promotor/a en campo. Si entraste directo a la página web sin promotor, se aplica la tarifa estándar.
+                        </small>
+                    </div>
                 </div>
 
                 <!-- CAJA DE LECTURA DE TÉRMINOS DEL CONTRATO -->
@@ -1824,6 +1840,7 @@ if (empty($planes)) {
                 <form id="reportPaymentForm" onsubmit="sendReportToWhatsApp(event)">
                     <input type="hidden" id="f_plan" value="Profesional">
                     <input type="hidden" id="f_precio" value="30">
+                    <input type="hidden" id="f_precio_base" value="30">
                     <input type="hidden" id="f_tipo_solicitud" value="Nueva Suscripción">
 
                     <div class="form-grid-modal">
@@ -1907,9 +1924,19 @@ if (empty($planes)) {
     <script>
         const WA_NUMBER = "<?= $config_saas['whatsapp_ventas'] ?>";
 
+        let promoData = null;
+
         function openPaymentModal(planNombre, planPrecio, tipo) {
             document.getElementById('f_plan').value = planNombre;
             document.getElementById('f_precio').value = planPrecio;
+            document.getElementById('f_precio_base').value = planPrecio;
+
+            // Resetear promo
+            promoData = null;
+            const codeInput = document.getElementById('f_codigo_promotor');
+            if (codeInput) codeInput.value = '';
+            const fb = document.getElementById('promo_feedback');
+            if (fb) { fb.style.display = 'none'; fb.innerHTML = ''; }
 
             const isRenovacion = (tipo === 'renovacion');
             document.getElementById('f_tipo_solicitud').value = isRenovacion ? 'Renovación de Mes' : 'Nueva Suscripción';
@@ -1921,6 +1948,69 @@ if (empty($planes)) {
 
             document.getElementById('paymentModal').classList.add('active');
             document.body.style.overflow = 'hidden';
+        }
+
+        function validarCodigoPromotor() {
+            const code = document.getElementById('f_codigo_promotor').value.trim().toUpperCase();
+            const fb = document.getElementById('promo_feedback');
+            if (!code) {
+                promoData = null;
+                fb.style.display = 'block';
+                fb.style.background = '#fef2f2';
+                fb.style.color = '#dc2626';
+                fb.style.border = '1px solid #fecaca';
+                fb.innerHTML = '<i class="fas fa-exclamation-circle"></i> Por favor ingresa el código de invitación de la promotora.';
+                updateModalPlanPrice();
+                return;
+            }
+
+            fb.style.display = 'block';
+            fb.style.background = '#f8fafc';
+            fb.style.color = '#64748b';
+            fb.style.border = '1px solid #e2e8f0';
+            fb.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando código de promotor...';
+
+            fetch('api/v1/public?action=validar_codigo_promotor&codigo=' + encodeURIComponent(code))
+                .then(r => r.json())
+                .then(res => {
+                    if (res.ok && res.data && res.data.valido) {
+                        promoData = res.data;
+                        fb.style.background = '#f0fdf4';
+                        fb.style.color = '#15803d';
+                        fb.style.border = '1px solid #bbf7d0';
+                        fb.innerHTML = `<i class="fas fa-check-circle"></i> <strong>¡Código Válido!</strong> Promotor(a): <strong>${res.data.promotor_nombre}</strong> (${res.data.cargo}).<br><span style="font-weight:700">Se ha aplicado un 10% de DESCUENTO en el alquiler de tu servicio.</span>`;
+                    } else {
+                        promoData = null;
+                        fb.style.background = '#fffbeb';
+                        fb.style.color = '#b45309';
+                        fb.style.border = '1px solid #fde68a';
+                        fb.innerHTML = '<i class="fas fa-times-circle"></i> Código no válido o inactivo. Las compras directas aplican la tarifa estándar sin descuento.';
+                    }
+                    updateModalPlanPrice();
+                })
+                .catch(() => {
+                    promoData = null;
+                    fb.style.background = '#fef2f2';
+                    fb.style.color = '#dc2626';
+                    fb.style.border = '1px solid #fecaca';
+                    fb.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error al verificar el código. Intenta de nuevo.';
+                    updateModalPlanPrice();
+                });
+        }
+
+        function updateModalPlanPrice() {
+            const basePrecio = parseFloat(document.getElementById('f_precio_base').value);
+            const planNombre = document.getElementById('f_plan').value;
+
+            if (promoData && promoData.valido) {
+                const descMonto = basePrecio * 0.10;
+                const finalPrecio = (basePrecio - descMonto).toFixed(2);
+                document.getElementById('f_precio').value = finalPrecio;
+                document.getElementById('modalPlanTitle').innerHTML = `Plan ${planNombre} <span style="text-decoration:line-through;color:#94a3b8;font-size:14px;">$${basePrecio.toFixed(2)}</span> <span style="color:#10b981;font-weight:900;">$${finalPrecio}/mes</span> <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700">10% OFF Promotor/a</span>`;
+            } else {
+                document.getElementById('f_precio').value = basePrecio.toFixed(2);
+                document.getElementById('modalPlanTitle').textContent = `Plan ${planNombre} ($${basePrecio.toFixed(2)}/mes)`;
+            }
         }
 
         function closePaymentModal() {
@@ -2013,9 +2103,18 @@ if (empty($planes)) {
                 return;
             }
 
+            let promoLine = '🌐 *Afiliación:* Registro Directo en Web (Tarifa Estándar)\n';
+            if (promoData && promoData.valido) {
+                const baseP = parseFloat(document.getElementById('f_precio_base').value).toFixed(2);
+                promoLine = `🎁 *Código Promotora:* ${promoData.codigo} (${promoData.promotor_nombre})\n` +
+                            `🏷️ *Descuento Aplicado:* 10% OFF Promotor en Campo\n` +
+                            `💵 *Total con Descuento:* $${precio}/mes (Antes: $${baseP})\n`;
+            }
+
             const mensaje = `✨ *REPORTE DE PAGO & CONTRATO — ALCORTE PRO*\n\n` +
                 `📌 *Tipo:* ${tipo}\n` +
                 `⭐ *Plan:* ${plan} ($${precio}/mes)\n` +
+                promoLine +
                 `🏢 *Negocio:* ${negocio}\n` +
                 `🏷️ *Categoría:* ${categoria}\n` +
                 `👤 *Responsable:* ${titular}\n` +

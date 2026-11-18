@@ -1,5 +1,5 @@
 <?php
-require_once '../backend/config/config.php';
+require_once __DIR__ . '/../backend/config/config.php';
 
 $allowed_roles = ['admin', 'superadmin', 'gerente'];
 if (!isset($_SESSION['rol']) || !in_array($_SESSION['rol'], $allowed_roles)) {

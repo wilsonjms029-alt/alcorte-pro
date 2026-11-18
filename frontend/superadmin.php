@@ -1,5 +1,5 @@
 <?php
-require_once '../backend/config/config.php';
+require_once __DIR__ . '/../backend/config/config.php';
 
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'superadmin') {
     header("Location: ../");
@@ -94,9 +94,39 @@ if ($r) while ($row = $r->fetch_assoc()) $config[$row['clave']] = $row['valor'];
 
 // === SUCURSALES ===
 $sucursales_arr = [];
-$r = @$conn->query("SELECT id, nombre, direccion, token FROM sucursales ORDER BY id ASC");
+$r = @$conn->query("SELECT s.*, p.nombre as promotor_nombre, p.codigo_invitacion as promotor_codigo 
+    FROM sucursales s 
+    LEFT JOIN promotores p ON s.promotor_id = p.id 
+    ORDER BY s.id ASC");
 if (!$r) $r = $conn->query("SELECT id, nombre, direccion, '' AS token FROM sucursales ORDER BY id ASC");
 if ($r) while ($row = $r->fetch_assoc()) $sucursales_arr[] = $row;
+
+// === PROMOTORES Y CARGOS ===
+$promotores_arr = [];
+$cargos_arr = [];
+$r = @$conn->query("SELECT * FROM cargos_equipo WHERE activo = 1 ORDER BY id ASC");
+if ($r) while ($row = $r->fetch_assoc()) $cargos_arr[] = $row;
+if (empty($cargos_arr)) {
+    $cargos_arr = [['id'=>1, 'nombre'=>'Promotor/a', 'descripcion'=>'Afiliación y captación de tiendas en campo']];
+}
+
+$r = @$conn->query("SELECT p.*, 
+    (SELECT COUNT(*) FROM sucursales s WHERE s.promotor_id = p.id) as total_tiendas,
+    (SELECT COALESCE(SUM(c.monto_comision), 0) FROM comisiones_promotores c WHERE c.promotor_id = p.id) as total_comisiones,
+    (SELECT COALESCE(SUM(c.monto_comision), 0) FROM comisiones_promotores c WHERE c.promotor_id = p.id AND c.estado = 'pendiente') as comisiones_pendientes
+    FROM promotores p ORDER BY p.id DESC");
+if ($r) while ($row = $r->fetch_assoc()) $promotores_arr[] = $row;
+
+$comisiones_arr = [];
+if ($page == 'equipo') {
+    $r = @$conn->query("SELECT c.*, p.nombre as promotor_nombre, p.codigo_invitacion as promotor_codigo, s.nombre as sucursal_nombre, pl.nombre as plan_nombre 
+        FROM comisiones_promotores c 
+        JOIN promotores p ON c.promotor_id = p.id 
+        JOIN sucursales s ON c.sucursal_id = s.id 
+        LEFT JOIN planes pl ON c.plan_id = pl.id 
+        ORDER BY c.id DESC LIMIT 100");
+    if ($r) while ($row = $r->fetch_assoc()) $comisiones_arr[] = $row;
+}
 
 // Plan colores
 $plan_colors = [
@@ -306,6 +336,10 @@ $plan_colors = [
         </a>
         <a href="superadmin.php?page=pagos" class="nav-item <?php echo $page=='pagos'?'active':''; ?>">
             <i class="fas fa-credit-card"></i><span>Pagos</span>
+        </a>
+        <div class="nav-section">Comercial</div>
+        <a href="superadmin.php?page=equipo" class="nav-item <?php echo $page=='equipo'?'active':''; ?>">
+            <i class="fas fa-user-tie"></i><span>Equipo & Promotores</span>
         </a>
         <div class="nav-section">Admin</div>
         <a href="superadmin.php?page=usuarios" class="nav-item <?php echo $page=='usuarios'?'active':''; ?>">
@@ -554,6 +588,20 @@ $plan_colors = [
                             <label class="form-label">Dirección</label>
                             <textarea id="shop_address" name="shop_address" class="form-textarea" placeholder="Ubicación detallada" required></textarea>
                         </div>
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-user-tag" style="color:#d4af37;margin-right:4px"></i> Promotor(a) de Campo / Código de Invitación</label>
+                            <select id="shop_promotor_id" name="promotor_id" class="form-select">
+                                <option value="">— Ninguno (Entrada Directa / Sin Promoción) —</option>
+                                <?php foreach ($promotores_arr as $prm): if ($prm['activo']): ?>
+                                <option value="<?php echo $prm['id']; ?>">
+                                    <?php echo htmlspecialchars($prm['nombre'] . ' (' . $prm['cargo'] . ') — Código: ' . $prm['codigo_invitacion'] . ' [10% Descuento Tienda | ' . $prm['porcentaje_comision'] . '% Comisión]'); ?>
+                                </option>
+                                <?php endif; endforeach; ?>
+                            </select>
+                            <div style="font-size:11px;color:#64748b;margin-top:4px">
+                                <i class="fas fa-info-circle"></i> Si la tienda fue captada por un/a promotor/a, recibe automáticamente un <strong>10% de descuento</strong> en el alquiler mensual de su plan, y el promotor acumula su comisión.
+                            </div>
+                        </div>
                         <div style="display:flex;gap:8px">
                             <button type="submit" class="btn btn-gold" style="flex:1;justify-content:center">Guardar</button>
                             <button type="button" onclick="resetSucForm()" class="btn btn-ghost">Cancelar</button>
@@ -636,10 +684,21 @@ $plan_colors = [
                             <?php if ($s['direccion']): ?>
                             <div style="font-size:12px;color:#64748b;margin-top:3px"><i class="fas fa-location-dot" style="margin-right:4px;font-size:10px;color:#94a3b8"></i><?php echo htmlspecialchars($s['direccion']); ?></div>
                             <?php endif; ?>
+                            <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                <?php if (!empty($s['promotor_id']) || !empty($s['codigo_promotor'])): ?>
+                                    <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
+                                        <i class="fas fa-tag"></i> Promotor/a: <strong><?php echo htmlspecialchars($s['promotor_nombre'] ?? $s['codigo_promotor']); ?></strong> (10% Desc. Aplicado)
+                                    </span>
+                                <?php else: ?>
+                                    <span style="font-size:11px;font-weight:600;background:#f8fafc;color:#94a3b8;border:1px solid #e2e8f0;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
+                                        <i class="fas fa-globe"></i> Entrada Directa (Tarifa Estándar)
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <!-- Acciones rápidas -->
                         <div style="display:flex;gap:5px;flex-shrink:0">
-                            <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>')" class="btn btn-ghost btn-sm" title="Editar tienda"><i class="fas fa-pen"></i></button>
+                            <button onclick="editSuc(<?php echo $s['id']; ?>,'<?php echo htmlspecialchars($s['nombre'],ENT_QUOTES); ?>','<?php echo htmlspecialchars($s['direccion']??'',ENT_QUOTES); ?>', <?php echo intval($s['promotor_id'] ?? 0); ?>)" class="btn btn-ghost btn-sm" title="Editar tienda"><i class="fas fa-pen"></i></button>
                             <form action="../api/v1/superadmin" method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar esta tienda y toda su data?')">
                                 <input type="hidden" name="csrf_token" value="<?php echo csrf_generate(); ?>">
                                 <input type="hidden" name="action" value="delete_sucursal">
@@ -969,10 +1028,11 @@ $plan_colors = [
                 resetSucForm();
             }
         }
-        function editSuc(id,nombre,dir){
+        function editSuc(id,nombre,dir,promotor_id){
             document.getElementById('shop_id').value=id;
             document.getElementById('shop_name').value=nombre;
             document.getElementById('shop_address').value=dir;
+            document.getElementById('shop_promotor_id').value = promotor_id || '';
             document.getElementById('shop_action').value='edit_sucursal';
             document.querySelector('#suc-form-title h3').textContent='Editar Tienda';
             
@@ -989,6 +1049,7 @@ $plan_colors = [
             document.getElementById('shop_id').value='';
             document.getElementById('shop_name').value='';
             document.getElementById('shop_address').value='';
+            document.getElementById('shop_promotor_id').value='';
             document.getElementById('shop_action').value='add_sucursal';
             document.querySelector('#suc-form-title h3').textContent='Registrar Tienda';
             
@@ -1277,6 +1338,10 @@ $plan_colors = [
                 </div>
             </div>
         </div>
+
+        <!-- ══════════════ EQUIPO Y PROMOTORES ══════════════ -->
+        <?php elseif($page == 'equipo'): ?>
+            <?php require_once __DIR__ . '/superadmin_equipo_inc.php'; ?>
 
         <!-- ══════════════ SETTINGS ══════════════ -->
         <?php elseif($page == 'settings'): ?>

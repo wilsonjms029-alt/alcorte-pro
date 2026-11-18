@@ -1,5 +1,5 @@
 <?php
-require_once '../backend/config/config.php';
+require_once __DIR__ . '/../backend/config/config.php';
 
 // Seguridad del rol
 if (!isset($_SESSION['rol']) || !in_array($_SESSION['rol'], ['barbero', 'admin', 'superadmin'])) {
