@@ -245,13 +245,13 @@ function upload_public_url(string $subdir, string $filename): string {
 
 /** Normaliza el token público de tienda (32 hex). */
 function store_token_normalize(string $raw): string {
-    return preg_replace('/[^a-f0-9]/', '', strtolower($raw));
+    return preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($raw));
 }
 
 /** Resuelve sucursal_id desde token de tienda; null si inválido. */
 function store_id_from_token(mysqli $conn, string $raw_token): ?int {
     $token = store_token_normalize($raw_token);
-    if (strlen($token) !== 32) {
+    if ($token === '' || strlen($token) > 64) {
         return null;
     }
     $stmt = $conn->prepare("SELECT id FROM sucursales WHERE token = ? AND activo = 1 LIMIT 1");
@@ -300,6 +300,7 @@ function get_plan_sucursal(mysqli $conn, int $sucursal_id): ?array {
         'has_custom_colors'  => $nivel >= 2,
         'has_service_images' => $nivel >= 2,
         'has_productos'      => $nivel >= 3,
+        'has_comisiones'     => $nivel >= 2,
     ];
 }
 

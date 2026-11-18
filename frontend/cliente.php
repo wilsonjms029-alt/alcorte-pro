@@ -4,9 +4,29 @@ require_once __DIR__ . '/../backend/config/config.php';
 $msg      = "";
 $msg_type = "success";
 $tab   = $_GET['tab'] ?? 'reservar';
-$token = preg_replace('/[^a-f0-9]/', '', strtolower($_GET['t'] ?? ''));
+$token = store_token_normalize($_GET['t'] ?? '');
 
-if (strlen($token) !== 32) {
+// Si no se proporcionó token en la URL, redirigir a la sucursal de la sesión o a la primera activa
+if ($token === '') {
+    if (!empty($_SESSION['sucursal_id'])) {
+        $st = $conn->prepare("SELECT token FROM sucursales WHERE id = ? AND activo = 1 LIMIT 1");
+        $st->bind_param("i", $_SESSION['sucursal_id']);
+        $st->execute();
+        $r = $st->get_result()->fetch_assoc();
+        $st->close();
+        if ($r && !empty($r['token'])) {
+            header('Location: cliente.php?t=' . urlencode($r['token']));
+            exit;
+        }
+    }
+    $first_suc = $conn->query("SELECT token FROM sucursales WHERE activo = 1 ORDER BY id ASC LIMIT 1");
+    if ($first_suc && $row_suc = $first_suc->fetch_assoc()) {
+        header('Location: cliente.php?t=' . urlencode($row_suc['token']));
+        exit;
+    }
+}
+
+if ($token === '' || strlen($token) > 64) {
     http_response_code(404);
     die('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>No encontrado</title></head><body style="font-family:sans-serif;text-align:center;padding:60px;color:#64748b"><h2>Enlace no válido</h2><p>El enlace de reservas que usaste no es válido.<br>Solicita el enlace correcto al establecimiento.</p></body></html>');
 }

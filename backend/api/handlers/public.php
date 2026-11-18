@@ -6,7 +6,7 @@ $input = api_input();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($action === 'agendar' && $method === 'POST') {
-    $token = preg_replace('/[^a-f0-9]/', '', strtolower($input['t'] ?? $_GET['t'] ?? ''));
+    $token = store_token_normalize((string) ($input['t'] ?? $_GET['t'] ?? ''));
     $sucursal_id = store_id_from_token($conn, $token);
     if (!$sucursal_id) {
         api_err('Tienda no válida', 404);
@@ -116,7 +116,7 @@ if ($action === 'agendar' && $method === 'POST') {
 }
 
 if ($action === 'pedido' && $method === 'POST') {
-    $token = preg_replace('/[^a-f0-9]/', '', strtolower($input['t'] ?? $_GET['t'] ?? ''));
+    $token = store_token_normalize((string) ($input['t'] ?? $_GET['t'] ?? ''));
     $sucursal_id = store_id_from_token($conn, $token);
     if (!$sucursal_id) {
         api_err('Tienda no válida', 404);

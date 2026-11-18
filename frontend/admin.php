@@ -38,6 +38,18 @@ $has_custom_colors  = $plan_activo ? $plan_activo['has_custom_colors'] : true;
 $has_service_images = $plan_activo ? $plan_activo['has_service_images'] : true;
 $has_productos      = $plan_activo ? $plan_activo['has_productos'] : false;
 $is_basic_plan      = $plan_activo && $plan_activo['max_barberos'] === 1;
+// Comisiones para el equipo: reservado para los dos planes más caros (Nivel >= 2)
+$has_comisiones = false;
+if (!$plan_activo) {
+    $has_comisiones = true;
+} else {
+    $top_planes_query = $conn->query("SELECT id FROM planes WHERE activo = 1 ORDER BY precio_mensual DESC LIMIT 2");
+    $top_planes_ids = [];
+    if ($top_planes_query) {
+        while ($tpr = $top_planes_query->fetch_assoc()) $top_planes_ids[] = intval($tpr['id']);
+    }
+    $has_comisiones = (!empty($plan_activo['has_comisiones']) || intval($plan_activo['nivel'] ?? 0) >= 2 || in_array(intval($plan_activo['id']), $top_planes_ids));
+}
 
 // Plan Básico: auto-crear barbero vinculado al admin si no existe
 if ($is_basic_plan && $is_scoped && $scope_id) {
@@ -722,6 +734,10 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                     <span>Pedidos</span>
                 </a>
                 <?php endif; ?>
+                <a href="?page=estadisticas" class="nav-item <?php echo $page == 'estadisticas' ? 'active' : ''; ?>">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Estadísticas</span>
+                </a>
                 <a href="?page=ajustes" class="nav-item <?php echo $page == 'ajustes' ? 'active' : ''; ?>">
                     <i class="fas fa-sliders-h"></i>
                     <span>Configuración</span>
@@ -2287,6 +2303,9 @@ if ($res_t) while ($tr = $res_t->fetch_assoc()) $tiendas_arr[] = $tr;
                         </div>
                         <?php endif; ?>
                     </div>
+
+                <?php elseif ($page == 'estadisticas'): ?>
+                    <?php require __DIR__ . '/admin_estadisticas_inc.php'; ?>
 
                 <?php elseif ($page == 'ajustes'): ?>
                     <div class="card">
